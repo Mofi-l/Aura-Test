@@ -5633,7 +5633,7 @@ function cleanupLocalStorage() {
                         isPaused: currentUserState.isPaused || false,
                         pauseTime: currentUserState.pauseTime || null,
                         totalPauseDuration: currentUserState.totalPauseDuration || 0,
-                        loginTime: userLoginTime,
+                        loginTime: localStorage.getItem(`deployed_loginTime_${username}`) || new Date().toISOString(),
                         logoutTime: currentUserState.auxLabel.toLowerCase().includes('offline') ?
                         localStorage.getItem('dailyLogoutTime') || new Date().toISOString() : null,
                         lastAuxUpdate: new Date().toISOString(),
