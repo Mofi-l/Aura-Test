@@ -4926,34 +4926,20 @@ body {
             // Dashboard functionality
             // Part 1: Core Dashboard Setup and Initialization
             // Dashboard click handler
-function setInitialLoginTime() {
-    const username = localStorage.getItem('lastAuthUsername');
-    const today = new Date().toISOString().split('T')[0];
-    const storedDate = localStorage.getItem(`lastLoginDate_${username}`);
-    
-    // Only set new login time if it's a new day
-    if (storedDate !== today) {
-        const loginTime = new Date().toISOString();
-        localStorage.setItem(`deployed_loginTime_${username}`, loginTime);
-        localStorage.setItem(`lastLoginDate_${username}`, today);
-    }
-}
+            function setInitialLoginTime() {
+                const today = new Date().toISOString().split('T')[0];
+                const storedDate = localStorage.getItem('lastLoginDate');
 
-function cleanupLocalStorage() {
-    const username = localStorage.getItem('lastAuthUsername');
-    const today = new Date().toISOString().split('T')[0];
-    const lastCleanup = localStorage.getItem('lastStorageCleanup');
+                if (storedDate !== today) {
+                    // New day - clear previous login time
+                    localStorage.removeItem('dailyLoginTime');
+                    localStorage.setItem('lastLoginDate', today);
+                }
 
-    if (lastCleanup !== today) {
-        // Clean up old entries but preserve current user's data
-        Object.keys(localStorage).forEach(key => {
-            if (key.startsWith('deployed_') && !key.includes(username)) {
-                localStorage.removeItem(key);
+                if (!localStorage.getItem('dailyLoginTime')) {
+                    localStorage.setItem('dailyLoginTime', new Date().toISOString());
+                }
             }
-        });
-        localStorage.setItem('lastStorageCleanup', today);
-    }
-}
 
             function setLogoutTime(auxLabel) {
                 const today = new Date().toISOString().split('T')[0];
@@ -5608,40 +5594,38 @@ function cleanupLocalStorage() {
                         // If the file doesn't exist, we'll create a new one
                     }
 
-        // Create a unique key for the current user's AUX state
-        const userAuxStateKey = `auxState_${username}`;
-        
-        // Get the most recent state for the current user
-        const currentUserState = JSON.parse(localStorage.getItem(userAuxStateKey)) || currentState;
+                    // Determine the correct login time
+                    let loginTime;
+                    if (existingData && existingData.date === today) {
+                        loginTime = existingData.loginTime;
+                    } else {
+                        loginTime = localStorage.getItem('dailyLoginTime') || new Date().toISOString();
+                        localStorage.setItem('dailyLoginTime', loginTime);
+                    }
 
-        // Determine the correct login time
-        // Use separate storage for deployed version
-        const originalLoginTime = localStorage.getItem(`deployed_loginTime_${username}`);
                     // Prepare the data object with explicit pause state information
                     const data = {
                         username: username,
-                        auxLabel: currentUserState.auxLabel,
-                        startTime: currentUserState.startTime,
+                        auxLabel: currentState.auxLabel,
+                        startTime: currentState.startTime,
                         lastUpdate: new Date().toISOString(),
-                        isPaused: currentUserState.isPaused || false,
-                        pauseTime: currentUserState.pauseTime || null,
-                        totalPauseDuration: currentUserState.totalPauseDuration || 0, 
-                        loginTime: localStorage.getItem(`deployed_loginTime_${username}`), // Add this line
-                        logoutTime: currentUserState.auxLabel.toLowerCase().includes('offline') ?
+                        isPaused: currentState.isPaused || false,
+                        pauseTime: currentState.pauseTime || null,
+                        totalPauseDuration: currentState.totalPauseDuration || 0,
+                        loginTime: loginTime,
+                        logoutTime: currentState.auxLabel.toLowerCase().includes('offline') ?
                         localStorage.getItem('dailyLogoutTime') || new Date().toISOString() : null,
                         lastAuxUpdate: new Date().toISOString(),
                         date: today,
                         status: calculateUserStatus(
                             new Date().getTime(),
-                            currentUserState.auxLabel,
-                            currentUserState.isPaused
+                            currentState.auxLabel,
+                            currentState.isPaused
                         )
                     };
 
                     console.log('Sending data to S3:', data);
-        // Store the updated state for this user
-        localStorage.setItem(userAuxStateKey, JSON.stringify(currentUserState));
-                    
+
                     // Send data to S3
                     await s3.putObject({
                         Bucket: 'real-time-databucket',
@@ -5760,193 +5744,166 @@ function cleanupLocalStorage() {
 
             let lastUpdates = [];
 
-async function updateDashboardData(isImmediateUpdate = false) {
-    try {
-        console.log('Updating dashboard data...', isImmediateUpdate ? '(Immediate update)' : '');
+            async function updateDashboardData(isImmediateUpdate = false) {
+                try {
+                    console.log('Updating dashboard data...', isImmediateUpdate ? '(Immediate update)' : '');
 
-        // First, ensure AWS SDK is loaded
-        await SharedFunctions.loadAwsSdk();
+                    // First, ensure AWS SDK is loaded
+                    await SharedFunctions.loadAwsSdk();
 
-        // Check and refresh credentials if needed
-        let token;
-        try {
-            token = await refreshCredentials();
-        } catch (credError) {
-            console.log('Credential refresh failed, requesting new authentication');
-            const credentials = await SharedFunctions.showAuthModal();
-            if (!credentials) throw new Error('Authentication cancelled');
+                    // Check and refresh credentials if needed
+                    let token;
+                    try {
+                        token = await refreshCredentials();
+                    } catch (credError) {
+                        console.log('Credential refresh failed, requesting new authentication');
+                        const credentials = await SharedFunctions.showAuthModal();
+                        if (!credentials) throw new Error('Authentication cancelled');
 
-            token = await authenticate(credentials.username, credentials.password);
-            localStorage.setItem('lastAuthUsername', credentials.username);
-            localStorage.setItem('lastAuthPassword', credentials.password);
-        }
+                        token = await authenticate(credentials.username, credentials.password);
+                        localStorage.setItem('lastAuthUsername', credentials.username);
+                        localStorage.setItem('lastAuthPassword', credentials.password);
+                    }
 
-        // Configure AWS with the token
-        AWS.config.update({
-            region: 'eu-north-1',
-            credentials: new AWS.CognitoIdentityCredentials({
-                IdentityPoolId: 'eu-north-1:98c07095-e731-4219-bebe-db4dab892ea8',
-                Logins: {
-                    'cognito-idp.eu-north-1.amazonaws.com/eu-north-1_V9kLPNVXl': token
+                    // Configure AWS with the token
+                    AWS.config.update({
+                        region: 'eu-north-1',
+                        credentials: new AWS.CognitoIdentityCredentials({
+                            IdentityPoolId: 'eu-north-1:98c07095-e731-4219-bebe-db4dab892ea8',
+                            Logins: {
+                                'cognito-idp.eu-north-1.amazonaws.com/eu-north-1_V9kLPNVXl': token
+                            }
+                        })
+                    });
+
+                    // Wait for credentials to be initialized
+                    await new Promise((resolve, reject) => {
+                        AWS.config.credentials.get(err => {
+                            if (err) reject(err);
+                            else resolve();
+                        });
+                    });
+
+                    const s3 = new AWS.S3();
+                    const response = await s3.listObjectsV2({
+                        Bucket: 'real-time-databucket',
+                        Prefix: 'aux-realtime/',
+                        MaxKeys: 1000
+                    }).promise();
+
+                    console.log(`Found ${response.Contents.length} AUX updates`);
+
+                    const currentTime = Date.now();
+                    const today = new Date().setHours(0, 0, 0, 0);
+                    const currentUsername = localStorage.getItem('lastAuthUsername');
+
+                    // Process all updates first
+                    const updates = await Promise.all(response.Contents.map(async (item) => {
+                        try {
+                            const data = await s3.getObject({
+                                Bucket: 'real-time-databucket',
+                                Key: item.Key
+                            }).promise();
+
+                            const userState = JSON.parse(data.Body.toString());
+                            const lastUpdateTime = new Date(userState.lastUpdate).getTime();
+                            const updateDate = new Date(lastUpdateTime).setHours(0, 0, 0, 0);
+                            const timeSinceUpdate = currentTime - lastUpdateTime;
+
+                            // Ensure we're using the stored login time
+                            const storedLoginTime = userState.loginTime;
+                            const today = new Date().toISOString().split('T')[0];
+
+                            // Only use stored login time if it's from today
+                            const loginTime = userState.date === today ?
+                                  storedLoginTime :
+                            new Date().toISOString();
+
+                            //if (updateDate === today) {
+                            return {
+                                ...userState,
+                                fileKey: item.Key,
+                                lastModified: item.LastModified,
+                                timeSinceUpdate,
+                                isPaused: userState.isPaused || false,
+                                status: calculateUserStatus(
+                                    lastUpdateTime,
+                                    userState.auxLabel,
+                                    userState.isPaused
+                                )
+                            };
+                            //}
+                            return null;
+                        } catch (error) {
+                            console.error(`Error processing file ${item.Key}:`, error);
+                            return null;
+                        }
+                    }));
+
+                    // Filter out nulls and sort updates
+                    const validUpdates = updates
+                    .filter(update => update !== null)
+                    .map(update => {
+                        console.log('Processing update:', update);
+                        const status = calculateUserStatus(
+                            new Date(update.lastUpdate).getTime(),
+                            update.auxLabel,
+                            update.isPaused
+                        );
+                        return {
+                            ...update,
+                            status
+                        };
+                    })
+                    .sort((a, b) => {
+                        if (a.username === currentUsername) return -1;
+                        if (b.username === currentUsername) return 1;
+                        return new Date(b.lastUpdate) - new Date(a.lastUpdate);
+                    });
+
+                    console.log('Processed updates:', validUpdates.length);
+
+                    // Store the latest updates for CSV download
+                    lastUpdates = validUpdates;
+
+                    // Update UI with the processed data
+                    updateDashboardUI(validUpdates);
+
+                    // Add continuous timer updates
+                    function updateDashboardTimers() {
+                        const timerCells = document.querySelectorAll('.dashboard-table td:nth-child(3)');
+                        timerCells.forEach(cell => {
+                            const row = cell.parentElement;
+                            const username = row.getAttribute('data-username');
+                            const auxState = JSON.parse(localStorage.getItem('auxState')) || {};
+
+                            if (auxState && !auxState.isPaused && auxState.username === username) {
+                                const startTime = auxState.startTime;
+                                const totalPauseDuration = auxState.totalPauseDuration || 0;
+                                const elapsedTime = Date.now() - startTime - totalPauseDuration;
+                                cell.textContent = formatTime(elapsedTime);
+                            }
+                        });
+
+                        // Continue the animation frame if the dashboard is still open
+                        if (document.getElementById('aux-dashboard')) {
+                            dashboardAnimationFrame = requestAnimationFrame(updateDashboardTimers);
+                        }
+                    }
+
+                    // Start the continuous timer updates
+                    if (document.getElementById('aux-dashboard')) {
+                        if (dashboardAnimationFrame) {
+                            cancelAnimationFrame(dashboardAnimationFrame);
+                        }
+                        dashboardAnimationFrame = requestAnimationFrame(updateDashboardTimers);
+                    }
+
+                } catch (error) {
+                    console.error('Error updating dashboard:', error);
+                    handleUpdateError(error);
                 }
-            })
-        });
-
-        // Wait for credentials to be initialized
-        await new Promise((resolve, reject) => {
-            AWS.config.credentials.get(err => {
-                if (err) reject(err);
-                else resolve();
-            });
-        });
-
-        const s3 = new AWS.S3();
-        const response = await s3.listObjectsV2({
-            Bucket: 'real-time-databucket',
-            Prefix: 'aux-realtime/',
-            MaxKeys: 1000
-        }).promise();
-
-        console.log(`Found ${response.Contents.length} AUX updates`);
-
-        const currentTime = Date.now();
-        const today = new Date().setHours(0, 0, 0, 0);
-        const currentUsername = localStorage.getItem('lastAuthUsername');
-        const userAuxStateKey = `auxState_${currentUsername}`;
-        const currentUserState = JSON.parse(localStorage.getItem(userAuxStateKey));
-
-        // Process all updates first
-        const updates = await Promise.all(response.Contents.map(async (item) => {
-            try {
-                const data = await s3.getObject({
-                    Bucket: 'real-time-databucket',
-                    Key: item.Key
-                }).promise();
-
-                const userState = JSON.parse(data.Body.toString());
-                const lastUpdateTime = new Date(userState.lastUpdate).getTime();
-                const updateDate = new Date(lastUpdateTime).setHours(0, 0, 0, 0);
-                const timeSinceUpdate = currentTime - lastUpdateTime;
-                const userLoginTime = localStorage.getItem(`deployed_loginTime_${userState.username}`);
-
-                // If this is the current user's data, merge with their local state
-                if (userState.username === currentUsername && currentUserState) {
-                    return {
-                        ...userState,
-                        ...currentUserState,
-                        fileKey: item.Key,
-                        loginTime: userState.loginTime || userLoginTime,
-                        lastModified: item.LastModified,
-                        timeSinceUpdate,
-                        isPaused: currentUserState.isPaused || false,
-                        status: calculateUserStatus(
-                            lastUpdateTime,
-                            currentUserState.auxLabel,
-                            currentUserState.isPaused
-                        )
-                    };
-                }
-
-                // For other users, use their stored state
-                return {
-                    ...userState,
-                    loginTime: userState.loginTime,
-                    fileKey: item.Key,
-                    lastModified: item.LastModified,
-                    timeSinceUpdate,
-                    isPaused: userState.isPaused || false,
-                    status: calculateUserStatus(
-                        lastUpdateTime,
-                        userState.auxLabel,
-                        userState.isPaused
-                    )
-                };
-            } catch (error) {
-                console.error(`Error processing file ${item.Key}:`, error);
-                return null;
             }
-        }));
-
-        // Filter out nulls and sort updates
-        const validUpdates = updates
-            .filter(update => update !== null)
-            .map(update => {
-                console.log('Processing update:', update);
-                const status = calculateUserStatus(
-                    new Date(update.lastUpdate).getTime(),
-                    update.auxLabel,
-                    update.isPaused
-                );
-                return {
-                    ...update,
-                    status
-                };
-            })
-            .sort((a, b) => {
-                if (a.username === currentUsername) return -1;
-                if (b.username === currentUsername) return 1;
-                return new Date(b.lastUpdate) - new Date(a.lastUpdate);
-            });
-
-        console.log('Processed updates:', validUpdates.length);
-
-        // Store the latest updates for CSV download
-        lastUpdates = validUpdates;
-
-        // Update UI with the processed data
-        updateDashboardUI(validUpdates);
-
-        // Add continuous timer updates
-        function updateDashboardTimers() {
-            const timerCells = document.querySelectorAll('.dashboard-table td:nth-child(3)');
-            timerCells.forEach(cell => {
-                const row = cell.parentElement;
-                const username = row.getAttribute('data-username');
-                const userSpecificStateKey = `auxState_${username}`;
-                const auxState = JSON.parse(localStorage.getItem(userSpecificStateKey)) || {};
-
-                if (auxState && !auxState.isPaused && auxState.username === username) {
-                    const startTime = auxState.startTime;
-                    const totalPauseDuration = auxState.totalPauseDuration || 0;
-                    const elapsedTime = Date.now() - startTime - totalPauseDuration;
-                    cell.textContent = formatTime(elapsedTime);
-                }
-            });
-
-            // Continue the animation frame if the dashboard is still open
-            if (document.getElementById('aux-dashboard')) {
-                dashboardAnimationFrame = requestAnimationFrame(updateDashboardTimers);
-            }
-        }
-
-        // Start the continuous timer updates
-        if (document.getElementById('aux-dashboard')) {
-            if (dashboardAnimationFrame) {
-                cancelAnimationFrame(dashboardAnimationFrame);
-            }
-            dashboardAnimationFrame = requestAnimationFrame(updateDashboardTimers);
-        }
-
-    } catch (error) {
-        console.error('Error updating dashboard:', error);
-        handleUpdateError(error);
-    }
-}
-
-function synchronizeUserState() {
-    const username = localStorage.getItem('lastAuthUsername');
-    const userAuxStateKey = `auxState_${username}`;
-    const currentState = JSON.parse(localStorage.getItem('auxState'));
-    const userState = JSON.parse(localStorage.getItem(userAuxStateKey));
-
-    if (currentState && username) {
-        // Ensure user-specific state is always up to date
-        localStorage.setItem(userAuxStateKey, JSON.stringify({
-            ...currentState,
-            username: username
-        }));
-    }
-}
 
             // Error handling function
             function handleUpdateError(error) {
@@ -6096,6 +6053,7 @@ function synchronizeUserState() {
                 <span>${update.username}</span>
             </div>
         `;
+
                         // AUX Label cell with pause indicator
                         const auxCell = row.insertCell();
                         const auxLabel = determineAuxLevel(update.auxLabel);
@@ -6132,14 +6090,11 @@ function synchronizeUserState() {
                         pauseTimeCell.textContent = formatTime(totalPause);
 
                         // Add cells for login time
-const loginTimeCell = row.insertCell();
-const userLoginTime = update.loginTime || 
-    localStorage.getItem(`deployed_loginTime_${update.username}`);
-
-loginTimeCell.textContent = userLoginTime ? 
-    new Date(userLoginTime).toLocaleTimeString() : 
-    'No login time recorded';
-
+                        const loginTimeCell = row.insertCell();
+                        const storedLoginTime = localStorage.getItem('dailyLoginTime');
+                        loginTimeCell.textContent = storedLoginTime ?
+                            new Date(storedLoginTime).toLocaleTimeString() :
+                        new Date(update.loginTime).toLocaleTimeString();
 
                         // Add logout time if exists
                         const logoutTimeCell = row.insertCell();
@@ -6273,7 +6228,6 @@ ${update.isPaused ? `Paused Since: ${new Date(update.pauseTime).toLocaleString()
                 const searchInput = document.querySelector('.search-input');
                 const statusFilter = document.querySelector('.status-filter');
                 setInitialLoginTime();
-                synchronizeUserState();
                 if (searchInput) {
                     searchInput.addEventListener('input', filterDashboard);
                 }
@@ -6281,7 +6235,6 @@ ${update.isPaused ? `Paused Since: ${new Date(update.pauseTime).toLocaleString()
                 if (statusFilter) {
                     statusFilter.addEventListener('change', filterDashboard);
                 }
-                setInterval(synchronizeUserState, 5000);
             });
 
             // Retry mechanism for failed updates
@@ -9342,10 +9295,8 @@ ${auxState.startTime ? `Started: ${new Date(auxState.startTime).toLocaleTimeStri
                     return;
                 }
 
-    const username = localStorage.getItem('lastAuthUsername');
-    const userAuxStateKey = `auxState_${username}`;
-    const prevState = JSON.parse(localStorage.getItem(userAuxStateKey));
-    const now = Date.now();
+                const prevState = JSON.parse(localStorage.getItem('auxState'));
+                const now = Date.now();
 
                 // Store the current total pause duration before state change
                 const currentTotalPauseDuration = prevState ? prevState.totalPauseDuration || 0 : 0;
@@ -9356,7 +9307,6 @@ ${auxState.startTime ? `Started: ${new Date(auxState.startTime).toLocaleTimeStri
                     (now - prevState.startTime) - (prevState.totalPauseDuration || 0);
 
                     await saveAUXData({
-            username: username,
                         auxLabel: prevState.auxLabel,
                         timeSpent: timeSpent,
                         date: formatDate(new Date()),
@@ -9372,7 +9322,6 @@ ${auxState.startTime ? `Started: ${new Date(auxState.startTime).toLocaleTimeStri
 
                     // Create new state
                     const newState = {
-            username: username,
                         auxLabel: newAuxLabel,
                         startTime: now,
                         timestamp: now,
@@ -9382,7 +9331,6 @@ ${auxState.startTime ? `Started: ${new Date(auxState.startTime).toLocaleTimeStri
 
                     // Store the new state
                     localStorage.setItem('auxState', JSON.stringify(newState));
-    localStorage.setItem(userAuxStateKey, JSON.stringify(newState));
 
                     // Start the timer immediately
                     const timerElement = displayTimer();
@@ -9418,12 +9366,6 @@ ${auxState.startTime ? `Started: ${new Date(auxState.startTime).toLocaleTimeStri
                 if (pauseButton) {
                     pauseButton.addEventListener('click', togglePause);
                 }
-
-    // Add context initialization
-    const isDeployed = !window.Tampermonkey;
-    if (isDeployed) {
-        cleanupLocalStorage();
-    }
                 const initialAuxState = localStorage.getItem('auxState');
                 console.log('Initial AUX state:', initialAuxState);
                 SharedFunctions.injectAuthStyles();
