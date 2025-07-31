@@ -5989,6 +5989,7 @@ if (existingData && existingData.date === today) {
             let currentSearchTerm = '';
 
             function updateDashboardUI(updates) {
+                const currentUsername = localStorage.getItem("currentUsername");
                 const tbody = document.getElementById('dashboard-data');
                 if (!tbody) {
                     console.error('Dashboard table body not found');
@@ -6014,8 +6015,6 @@ if (existingData && existingData.date === today) {
         }
     `;
                 document.head.appendChild(style);
-
-                const currentUsername = localStorage.getItem("currentUsername");
 
                 updates.forEach((update, index) => {
                     const row = tbody.insertRow();
@@ -6096,9 +6095,7 @@ if (existingData && existingData.date === today) {
                         pauseTimeCell.textContent = formatTime(totalPause);
 
                         // Add cells for login time
-        const loginTimeCell = row.insertCell();
-        const currentUsername = localStorage.getItem("currentUsername");
-        
+        const loginTimeCell = row.insertCell();        
         if (update.username === currentUsername) {
             // For current user, use the stored initial login time
             const initialLoginTime = localStorage.getItem('dailyLoginTime');
