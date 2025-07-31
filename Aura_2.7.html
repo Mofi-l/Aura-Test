@@ -4928,18 +4928,15 @@ body {
             // Dashboard click handler
 function setInitialLoginTime() {
     const username = localStorage.getItem('lastAuthUsername');
-    // Use a namespace for the deployed version
-    const storagePrefix = 'deployed_';
     const today = new Date().toISOString().split('T')[0];
-    const storedDate = localStorage.getItem(`${storagePrefix}lastLoginDate_${username}`);
+    const storedDate = localStorage.getItem(`lastLoginDate_${username}`);
 
     if (storedDate !== today) {
-        localStorage.removeItem(`${storagePrefix}loginTime_${username}`);
-        localStorage.setItem(`${storagePrefix}lastLoginDate_${username}`, today);
-    }
-
-    if (!localStorage.getItem(`${storagePrefix}loginTime_${username}`)) {
-        localStorage.setItem(`${storagePrefix}loginTime_${username}`, new Date().toISOString());
+        // Only set new login time if it's a new day or no login time exists
+        if (!localStorage.getItem(`deployed_loginTime_${username}`)) {
+            localStorage.setItem(`deployed_loginTime_${username}`, new Date().toISOString());
+        }
+        localStorage.setItem(`lastLoginDate_${username}`, today);
     }
 }
 
@@ -5621,9 +5618,7 @@ function cleanupLocalStorage() {
                     // Determine the correct login time
 
         // Use separate storage for deployed version
-        const userLoginTime = localStorage.getItem(`deployed_loginTime_${username}`) || 
-            new Date().toISOString();
-
+        const originalLoginTime = localStorage.getItem(`deployed_loginTime_${username}`);
                     // Prepare the data object with explicit pause state information
                     const data = {
                         username: username,
@@ -5633,7 +5628,7 @@ function cleanupLocalStorage() {
                         isPaused: currentUserState.isPaused || false,
                         pauseTime: currentUserState.pauseTime || null,
                         totalPauseDuration: currentUserState.totalPauseDuration || 0,
-                        loginTime: localStorage.getItem(`deployed_loginTime_${username}`) || new Date().toISOString(),
+                                    loginTime: originalLoginTime || new Date().toISOString(), // Use original login time
                         logoutTime: currentUserState.auxLabel.toLowerCase().includes('offline') ?
                         localStorage.getItem('dailyLogoutTime') || new Date().toISOString() : null,
                         lastAuxUpdate: new Date().toISOString(),
@@ -5834,6 +5829,7 @@ async function updateDashboardData(isImmediateUpdate = false) {
                 const lastUpdateTime = new Date(userState.lastUpdate).getTime();
                 const updateDate = new Date(lastUpdateTime).setHours(0, 0, 0, 0);
                 const timeSinceUpdate = currentTime - lastUpdateTime;
+                const userLoginTime = localStorage.getItem(`deployed_loginTime_${userState.username}`);
 
                 // If this is the current user's data, merge with their local state
                 if (userState.username === currentUsername && currentUserState) {
@@ -5841,6 +5837,7 @@ async function updateDashboardData(isImmediateUpdate = false) {
                         ...userState,
                         ...currentUserState,
                         fileKey: item.Key,
+                        loginTime: userState.loginTime || userLoginTime,
                         lastModified: item.LastModified,
                         timeSinceUpdate,
                         isPaused: currentUserState.isPaused || false,
@@ -5855,6 +5852,7 @@ async function updateDashboardData(isImmediateUpdate = false) {
                 // For other users, use their stored state
                 return {
                     ...userState,
+                    loginTime: userState.loginTime,
                     fileKey: item.Key,
                     lastModified: item.LastModified,
                     timeSinceUpdate,
