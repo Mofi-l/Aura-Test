@@ -5578,7 +5578,7 @@ body {
 
                     const s3 = new AWS.S3();
                     const today = new Date().toISOString().split('T')[0];
-
+                    const initialLoginTime = localStorage.getItem('dailyLoginTime');
                     // Try to get existing data from AWS first
                     let existingData;
                     try {
@@ -5595,13 +5595,14 @@ body {
                     }
 
                     // Determine the correct login time
-                    let loginTime;
-                    if (existingData && existingData.date === today) {
-                        loginTime = existingData.loginTime;
-                    } else {
-                        loginTime = localStorage.getItem('dailyLoginTime') || new Date().toISOString();
-                        localStorage.setItem('dailyLoginTime', loginTime);
-                    }
+let loginTime;
+if (existingData && existingData.date === today) {
+    loginTime = existingData.loginTime;
+} else {
+    // Use setInitialLoginTime to ensure consistency
+    setInitialLoginTime();
+    loginTime = localStorage.getItem('dailyLoginTime');
+}
 
                     // Prepare the data object with explicit pause state information
                     const data = {
@@ -5612,7 +5613,7 @@ body {
                         isPaused: currentState.isPaused || false,
                         pauseTime: currentState.pauseTime || null,
                         totalPauseDuration: currentState.totalPauseDuration || 0,
-                        loginTime: currentState.startTime || new Date().toISOString(),
+                        loginTime: initialLoginTime,
                         logoutTime: currentState.auxLabel.toLowerCase().includes('offline') ?
                         localStorage.getItem('dailyLogoutTime') || new Date().toISOString() : null,
                         lastAuxUpdate: new Date().toISOString(),
@@ -6096,12 +6097,19 @@ body {
 
                         // Add cells for login time
         const loginTimeCell = row.insertCell();
-        if (update.loginTime) {
-            console.log(`Login time for ${update.username}:`, update.loginTime);
-            loginTimeCell.textContent = new Date(update.loginTime).toLocaleTimeString();
+        const currentUsername = localStorage.getItem("currentUsername");
+        
+        if (update.username === currentUsername) {
+            // For current user, use the stored initial login time
+            const initialLoginTime = localStorage.getItem('dailyLoginTime');
+            loginTimeCell.textContent = initialLoginTime ? 
+                new Date(initialLoginTime).toLocaleTimeString() : 
+                'No login time';
         } else {
-            console.log(`No login time found for ${update.username}`);
-            loginTimeCell.textContent = 'No login time';
+            // For other users, use their login time from the update
+            loginTimeCell.textContent = update.loginTime ? 
+                new Date(update.loginTime).toLocaleTimeString() : 
+                'No login time';
         }
                         // Add logout time if exists
                         const logoutTimeCell = row.insertCell();
