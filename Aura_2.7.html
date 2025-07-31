@@ -4926,20 +4926,38 @@ body {
             // Dashboard functionality
             // Part 1: Core Dashboard Setup and Initialization
             // Dashboard click handler
-            function setInitialLoginTime() {
-                const today = new Date().toISOString().split('T')[0];
-                const storedDate = localStorage.getItem('lastLoginDate');
+function setInitialLoginTime() {
+    const username = localStorage.getItem('lastAuthUsername');
+    // Use a namespace for the deployed version
+    const storagePrefix = 'deployed_';
+    const today = new Date().toISOString().split('T')[0];
+    const storedDate = localStorage.getItem(`${storagePrefix}lastLoginDate_${username}`);
 
-                if (storedDate !== today) {
-                    // New day - clear previous login time
-                    localStorage.removeItem('dailyLoginTime');
-                    localStorage.setItem('lastLoginDate', today);
-                }
+    if (storedDate !== today) {
+        localStorage.removeItem(`${storagePrefix}loginTime_${username}`);
+        localStorage.setItem(`${storagePrefix}lastLoginDate_${username}`, today);
+    }
 
-                if (!localStorage.getItem('dailyLoginTime')) {
-                    localStorage.setItem('dailyLoginTime', new Date().toISOString());
-                }
+    if (!localStorage.getItem(`${storagePrefix}loginTime_${username}`)) {
+        localStorage.setItem(`${storagePrefix}loginTime_${username}`, new Date().toISOString());
+    }
+}
+
+function cleanupLocalStorage() {
+    const username = localStorage.getItem('lastAuthUsername');
+    const today = new Date().toISOString().split('T')[0];
+    const lastCleanup = localStorage.getItem('lastStorageCleanup');
+
+    if (lastCleanup !== today) {
+        // Clean up old entries but preserve current user's data
+        Object.keys(localStorage).forEach(key => {
+            if (key.startsWith('deployed_') && !key.includes(username)) {
+                localStorage.removeItem(key);
             }
+        });
+        localStorage.setItem('lastStorageCleanup', today);
+    }
+}
 
             function setLogoutTime(auxLabel) {
                 const today = new Date().toISOString().split('T')[0];
@@ -5595,13 +5613,10 @@ body {
                     }
 
                     // Determine the correct login time
-                    let loginTime;
-                    if (existingData && existingData.date === today) {
-                        loginTime = existingData.loginTime;
-                    } else {
-                        loginTime = localStorage.getItem('dailyLoginTime') || new Date().toISOString();
-                        localStorage.setItem('dailyLoginTime', loginTime);
-                    }
+
+        // Use separate storage for deployed version
+        const userLoginTime = localStorage.getItem(`deployed_loginTime_${username}`) || 
+            new Date().toISOString();
 
                     // Prepare the data object with explicit pause state information
                     const data = {
@@ -5612,7 +5627,7 @@ body {
                         isPaused: currentState.isPaused || false,
                         pauseTime: currentState.pauseTime || null,
                         totalPauseDuration: currentState.totalPauseDuration || 0,
-                        loginTime: loginTime,
+                        loginTime: userLoginTime,
                         logoutTime: currentState.auxLabel.toLowerCase().includes('offline') ?
                         localStorage.getItem('dailyLogoutTime') || new Date().toISOString() : null,
                         lastAuxUpdate: new Date().toISOString(),
@@ -6053,7 +6068,6 @@ body {
                 <span>${update.username}</span>
             </div>
         `;
-
                         // AUX Label cell with pause indicator
                         const auxCell = row.insertCell();
                         const auxLabel = determineAuxLevel(update.auxLabel);
@@ -6090,11 +6104,13 @@ body {
                         pauseTimeCell.textContent = formatTime(totalPause);
 
                         // Add cells for login time
-                        const loginTimeCell = row.insertCell();
-                        const storedLoginTime = localStorage.getItem('dailyLoginTime');
-                        loginTimeCell.textContent = storedLoginTime ?
-                            new Date(storedLoginTime).toLocaleTimeString() :
-                        new Date(update.loginTime).toLocaleTimeString();
+
+        const loginTimeCell = row.insertCell();
+        const userLoginTime = update.loginTime || 
+            localStorage.getItem(`deployed_loginTime_${update.username}`);
+        loginTimeCell.textContent = userLoginTime ? 
+            new Date(userLoginTime).toLocaleTimeString() : 
+            'No login time recorded';
 
                         // Add logout time if exists
                         const logoutTimeCell = row.insertCell();
@@ -9366,6 +9382,12 @@ ${auxState.startTime ? `Started: ${new Date(auxState.startTime).toLocaleTimeStri
                 if (pauseButton) {
                     pauseButton.addEventListener('click', togglePause);
                 }
+
+    // Add context initialization
+    const isDeployed = !window.Tampermonkey;
+    if (isDeployed) {
+        cleanupLocalStorage();
+    }
                 const initialAuxState = localStorage.getItem('auxState');
                 console.log('Initial AUX state:', initialAuxState);
                 SharedFunctions.injectAuthStyles();
