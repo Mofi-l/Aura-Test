@@ -4930,12 +4930,11 @@ function setInitialLoginTime() {
     const username = localStorage.getItem('lastAuthUsername');
     const today = new Date().toISOString().split('T')[0];
     const storedDate = localStorage.getItem(`lastLoginDate_${username}`);
-
+    
+    // Only set new login time if it's a new day
     if (storedDate !== today) {
-        // Only set new login time if it's a new day or no login time exists
-        if (!localStorage.getItem(`deployed_loginTime_${username}`)) {
-            localStorage.setItem(`deployed_loginTime_${username}`, new Date().toISOString());
-        }
+        const loginTime = new Date().toISOString();
+        localStorage.setItem(`deployed_loginTime_${username}`, loginTime);
         localStorage.setItem(`lastLoginDate_${username}`, today);
     }
 }
@@ -5615,8 +5614,7 @@ function cleanupLocalStorage() {
         // Get the most recent state for the current user
         const currentUserState = JSON.parse(localStorage.getItem(userAuxStateKey)) || currentState;
 
-                    // Determine the correct login time
-
+        // Determine the correct login time
         // Use separate storage for deployed version
         const originalLoginTime = localStorage.getItem(`deployed_loginTime_${username}`);
                     // Prepare the data object with explicit pause state information
@@ -5627,8 +5625,8 @@ function cleanupLocalStorage() {
                         lastUpdate: new Date().toISOString(),
                         isPaused: currentUserState.isPaused || false,
                         pauseTime: currentUserState.pauseTime || null,
-                        totalPauseDuration: currentUserState.totalPauseDuration || 0,
-                                    loginTime: originalLoginTime || new Date().toISOString(), // Use original login time
+                        totalPauseDuration: currentUserState.totalPauseDuration || 0, 
+                        loginTime: localStorage.getItem(`deployed_loginTime_${username}`), // Add this line
                         logoutTime: currentUserState.auxLabel.toLowerCase().includes('offline') ?
                         localStorage.getItem('dailyLogoutTime') || new Date().toISOString() : null,
                         lastAuxUpdate: new Date().toISOString(),
@@ -6134,13 +6132,14 @@ function synchronizeUserState() {
                         pauseTimeCell.textContent = formatTime(totalPause);
 
                         // Add cells for login time
+const loginTimeCell = row.insertCell();
+const userLoginTime = update.loginTime || 
+    localStorage.getItem(`deployed_loginTime_${update.username}`);
 
-        const loginTimeCell = row.insertCell();
-        const userLoginTime = update.loginTime || 
-            localStorage.getItem(`deployed_loginTime_${update.username}`);
-        loginTimeCell.textContent = userLoginTime ? 
-            new Date(userLoginTime).toLocaleTimeString() : 
-            'No login time recorded';
+loginTimeCell.textContent = userLoginTime ? 
+    new Date(userLoginTime).toLocaleTimeString() : 
+    'No login time recorded';
+
 
                         // Add logout time if exists
                         const logoutTimeCell = row.insertCell();
