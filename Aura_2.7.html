@@ -4941,16 +4941,6 @@ body {
                 }
             }
 
-// Add this function to store login time per user
-function setUserLoginTime(username) {
-    const today = new Date().toISOString().split('T')[0];
-    const key = `loginTime_${username}_${today}`;
-    if (!localStorage.getItem(key)) {
-        localStorage.setItem(key, new Date().toISOString());
-    }
-    return localStorage.getItem(key);
-}
-
             function setLogoutTime(auxLabel) {
                 const today = new Date().toISOString().split('T')[0];
                 const storedDate = localStorage.getItem('lastLogoutDate');
@@ -6102,10 +6092,9 @@ function setUserLoginTime(username) {
 
                         // Add cells for login time
 const loginTimeCell = row.insertCell();
-const userLoginTime = localStorage.getItem(`loginTime_${update.username}_${today}`) || 
-                     update.loginTime || 
-                     new Date().toISOString();
-loginTimeCell.textContent = new Date(userLoginTime).toLocaleTimeString();
+loginTimeCell.textContent = update.loginTime ? 
+    new Date(update.loginTime).toLocaleTimeString() : 
+    'No login time';
                         // Add logout time if exists
                         const logoutTimeCell = row.insertCell();
                         const storedLogoutTime = localStorage.getItem('dailyLogoutTime');
