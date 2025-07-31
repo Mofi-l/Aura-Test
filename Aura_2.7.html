@@ -4941,6 +4941,16 @@ body {
                 }
             }
 
+// Add this function to store login time per user
+function setUserLoginTime(username) {
+    const today = new Date().toISOString().split('T')[0];
+    const key = `loginTime_${username}_${today}`;
+    if (!localStorage.getItem(key)) {
+        localStorage.setItem(key, new Date().toISOString());
+    }
+    return localStorage.getItem(key);
+}
+
             function setLogoutTime(auxLabel) {
                 const today = new Date().toISOString().split('T')[0];
                 const storedDate = localStorage.getItem('lastLogoutDate');
@@ -6019,6 +6029,7 @@ body {
                 updates.forEach((update, index) => {
                     const row = tbody.insertRow();
                     const isCurrentUser = update.username === currentUsername;
+                    const today = new Date().toISOString().split('T')[0];
 
                     // Add highlighting for current user
                     if (isCurrentUser) {
@@ -6090,12 +6101,11 @@ body {
                         pauseTimeCell.textContent = formatTime(totalPause);
 
                         // Add cells for login time
-                        const loginTimeCell = row.insertCell();
-                        const storedLoginTime = localStorage.getItem('dailyLoginTime');
-                        loginTimeCell.textContent = storedLoginTime ?
-                            new Date(storedLoginTime).toLocaleTimeString() :
-                        new Date(update.loginTime).toLocaleTimeString();
-
+const loginTimeCell = row.insertCell();
+const userLoginTime = localStorage.getItem(`loginTime_${update.username}_${today}`) || 
+                     update.loginTime || 
+                     new Date().toISOString();
+loginTimeCell.textContent = new Date(userLoginTime).toLocaleTimeString();
                         // Add logout time if exists
                         const logoutTimeCell = row.insertCell();
                         const storedLogoutTime = localStorage.getItem('dailyLogoutTime');
