@@ -5612,7 +5612,7 @@ body {
                         isPaused: currentState.isPaused || false,
                         pauseTime: currentState.pauseTime || null,
                         totalPauseDuration: currentState.totalPauseDuration || 0,
-                        loginTime: loginTime,
+                        loginTime: currentState.startTime || new Date().toISOString(),
                         logoutTime: currentState.auxLabel.toLowerCase().includes('offline') ?
                         localStorage.getItem('dailyLogoutTime') || new Date().toISOString() : null,
                         lastAuxUpdate: new Date().toISOString(),
@@ -6025,6 +6025,10 @@ body {
                     if (isCurrentUser) {
                         row.style.backgroundColor = 'rgba(108, 92, 231, 0.1)';
                         row.style.borderLeft = '3px solid #6c5ce7';
+            update = {
+                ...update,
+                loginTime: update.loginTime // Preserve the AWS login time
+            };
                     }
 
                     // Determine status based on updated conditions
@@ -6091,10 +6095,14 @@ body {
                         pauseTimeCell.textContent = formatTime(totalPause);
 
                         // Add cells for login time
-const loginTimeCell = row.insertCell();
-loginTimeCell.textContent = update.loginTime ? 
-    new Date(update.loginTime).toLocaleTimeString() : 
-    'No login time';
+        const loginTimeCell = row.insertCell();
+        if (update.loginTime) {
+            console.log(`Login time for ${update.username}:`, update.loginTime);
+            loginTimeCell.textContent = new Date(update.loginTime).toLocaleTimeString();
+        } else {
+            console.log(`No login time found for ${update.username}`);
+            loginTimeCell.textContent = 'No login time';
+        }
                         // Add logout time if exists
                         const logoutTimeCell = row.insertCell();
                         const storedLogoutTime = localStorage.getItem('dailyLogoutTime');
