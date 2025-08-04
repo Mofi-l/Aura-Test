@@ -1555,104 +1555,268 @@ body {
             ///////////////////////////////////////////////////////////////
             //Save and Display AUX data//
             // Function to save AUX data to localStorage
-            async function saveAUXData(entry) {
-                const auxData = JSON.parse(localStorage.getItem('auxData')) || [];
+async function saveAUXData(entry) {
+    try {
+        const username = await (entry.username instanceof Promise ?
+            entry.username :
+            entry.username || localStorage.getItem("currentUsername"));
 
-                // Wait for username if it's a Promise, otherwise use the stored username
-                let username;
-                if (entry.username instanceof Promise) {
-                    username = await entry.username;
-                } else {
-                    username = entry.username || localStorage.getItem("currentUsername");
-                }
+        if (!username) {
+            console.error("Username is missing. Data cannot be saved.");
+            return;
+        }
 
-                if (!username) {
-                    console.error("Username is missing. Data cannot be saved.");
-                    return;
-                }
+        const timeSpentInSeconds = entry.timeSpent / 1000;
 
-                const timeSpentInSeconds = entry.timeSpent / 1000;
+        // Save unique values
+        function saveUniqueValue(key, value) {
+            let storedValues = JSON.parse(localStorage.getItem(key)) || [];
+            if (value && !storedValues.includes(value)) {
+                storedValues.push(value);
+                localStorage.setItem(key, JSON.stringify(storedValues));
+            }
+        }
 
-                function saveUniqueValue(key, value) {
-                    let storedValues = JSON.parse(localStorage.getItem(key)) || [];
-                    if (value && !storedValues.includes(value)) {
-                        storedValues.push(value);
-                        localStorage.setItem(key, JSON.stringify(storedValues));
-                    }
-                }
+        const auxData = JSON.parse(localStorage.getItem('auxData')) || [];
+        const lastEntry = auxData.length > 0 ? auxData[auxData.length - 1] : null;
 
-                const lastEntry = auxData.length > 0 ? auxData[auxData.length - 1] : null;
+        // Check for duplicate entries
+        if (lastEntry &&
+            lastEntry.auxLabel === entry.auxLabel &&
+            lastEntry.username === username &&
+            Math.abs(new Date(lastEntry.date).getTime() - new Date(entry.date).getTime()) < 500) {
+            console.log('Skipping duplicate entry within 500ms window');
+            return;
+        }
 
-                if (lastEntry &&
-                    lastEntry.auxLabel === entry.auxLabel &&
-                    lastEntry.username === username &&
-                    Math.abs(new Date(lastEntry.date).getTime() - new Date(entry.date).getTime()) < 500) {
-                    console.log('Skipping duplicate entry within 500ms window');
-                    return;
-                }
+        // Modified audit count handling
+        const wasPreviousConductProject = lastEntry &&
+              lastEntry.auxLabel.toLowerCase().includes('conduct project');
 
-                // Modified audit count handling
-                const wasPreviousConductProject = lastEntry &&
-                      lastEntry.auxLabel.toLowerCase().includes('conduct project');
+        // Always push audit count to previous entry if it was Conduct Project
+        if (entry.relatedAudits && wasPreviousConductProject) {
+            if (lastEntry) {
+                lastEntry.relatedAudits = entry.relatedAudits;
+                auxData[auxData.length - 1] = lastEntry;
+                entry.relatedAudits = null; // Clear audit count from current entry
+            }
+        }
 
-                // Always push audit count to previous entry if it was Conduct Project
-                if (entry.relatedAudits && wasPreviousConductProject) {
-                    if (lastEntry) {
-                        lastEntry.relatedAudits = entry.relatedAudits;
-                        auxData[auxData.length - 1] = lastEntry;
-                        entry.relatedAudits = null; // Clear audit count from current entry
-                    }
-                }
+        // Handle offline entries
+        if (entry.auxLabel === "Offline - N/A - N/A") {
+            if (!auxData.some(item => item.auxLabel === "Offline - N/A - N/A")) {
+                const uniqueId = `${username}-${entry.date}-${entry.auxLabel}-${Math.random().toString(36).substr(2, 9)}`;
+                saveUniqueValue('relatedAudits', entry.relatedAudits);
 
-                if (entry.auxLabel === "Offline - N/A - N/A") {
-                    if (!auxData.some(item => item.auxLabel === "Offline - N/A - N/A")) {
-                        const uniqueId = `${username}-${entry.date}-${entry.auxLabel}-${Math.random().toString(36).substr(2, 9)}`;
+                const newEntry = {
+                    uniqueId,
+                    date: entry.date,
+                    username,
+                    auxLabel: entry.auxLabel,
+                    timeSpent: entry.timeSpent,
+                    projectTitle: entry.projectTitle || localStorage.getItem('projectTitle-' + entry.auxLabel),
+                    relatedAudits: entry.relatedAudits,
+                    areYouPL: entry.areYouPL || localStorage.getItem('areYouPL-' + entry.auxLabel),
+                    comment: entry.comment || localStorage.getItem('comment-' + entry.auxLabel),
+                    timestamp: new Date().toISOString()
+                };
 
-                        saveUniqueValue('relatedAudits', entry.relatedAudits);
+                auxData.push(newEntry);
+                localStorage.setItem('auxData', JSON.stringify(auxData));
+                await saveToS3WithUserFolder(newEntry, username);
+                console.log('Offline entry saved:', newEntry);
+            }
+        } else if (timeSpentInSeconds > 5) {
+            const uniqueId = `${username}-${entry.date}-${entry.auxLabel}-${Math.random().toString(36).substr(2, 9)}`;
+            saveUniqueValue('relatedAudits', entry.relatedAudits);
 
-                        const newEntry = {
-                            uniqueId,
-                            date: entry.date,
-                            username,
-                            auxLabel: entry.auxLabel,
-                            timeSpent: entry.timeSpent,
-                            projectTitle: entry.projectTitle || localStorage.getItem('projectTitle-' + entry.auxLabel),
-                            relatedAudits: entry.relatedAudits,
-                            areYouPL: entry.areYouPL || localStorage.getItem('areYouPL-' + entry.auxLabel),
-                            comment: entry.comment || localStorage.getItem('comment-' + entry.auxLabel),
-                        };
+            const newEntry = {
+                uniqueId,
+                date: entry.date,
+                username,
+                auxLabel: entry.auxLabel,
+                timeSpent: entry.timeSpent,
+                projectTitle: entry.projectTitle || localStorage.getItem('projectTitle-' + entry.auxLabel),
+                relatedAudits: entry.relatedAudits,
+                areYouPL: entry.areYouPL || localStorage.getItem('areYouPL-' + entry.auxLabel),
+                comment: entry.comment || localStorage.getItem('comment-' + entry.auxLabel),
+                timestamp: new Date().toISOString()
+            };
 
-                        auxData.push(newEntry);
-                        localStorage.setItem('auxData', JSON.stringify(auxData));
-                        console.log('Offline entry saved:', newEntry);
-                    }
-                } else if (timeSpentInSeconds > 5) {
-                    const uniqueId = `${username}-${entry.date}-${entry.auxLabel}-${Math.random().toString(36).substr(2, 9)}`;
+            auxData.push(newEntry);
+            localStorage.setItem('auxData', JSON.stringify(auxData));
+            await saveToS3WithUserFolder(newEntry, username);
+            console.log('AUX Data saved:', newEntry);
 
-                    saveUniqueValue('relatedAudits', entry.relatedAudits);
-
-                    const newEntry = {
-                        uniqueId,
-                        date: entry.date,
-                        username,
-                        auxLabel: entry.auxLabel,
-                        timeSpent: entry.timeSpent,
-                        projectTitle: entry.projectTitle || localStorage.getItem('projectTitle-' + entry.auxLabel),
-                        relatedAudits: entry.relatedAudits,
-                        areYouPL: entry.areYouPL || localStorage.getItem('areYouPL-' + entry.auxLabel),
-                        comment: entry.comment || localStorage.getItem('comment-' + entry.auxLabel),
-                    };
-
-                    auxData.push(newEntry);
-                    localStorage.setItem('auxData', JSON.stringify(auxData));
-                    console.log('AUX Data saved:', newEntry);
-                } else {
-                    console.log('Time spent is less than 5 seconds. Skipping entry.');
-                }
-
-                displayAUXData(false);
+            // Update dashboard if open
+            if (document.getElementById('aux-dashboard')) {
+                await updateDashboardData(true);
             }
 
+        } else {
+            console.log('Time spent is less than 5 seconds. Skipping entry.');
+        }
+
+        displayAUXData(false);
+
+        // Send update to AWS if online
+        if (navigator.onLine) {
+            try {
+                await sendAuxUpdate();
+            } catch (error) {
+                console.error('Failed to send update to AWS:', error);
+                // Add to pending uploads
+                const pendingUploads = JSON.parse(localStorage.getItem('pendingUploads')) || [];
+                pendingUploads.push(entry);
+                localStorage.setItem('pendingUploads', JSON.stringify(pendingUploads));
+            }
+        }
+
+    } catch (error) {
+        console.error('Error in saveAUXData:', error);
+        SharedFunctions.showCustomAlert('Failed to save AUX data: ' + error.message);
+
+        // Store failed entry for retry
+        const failedUploads = JSON.parse(localStorage.getItem('failedUploads')) || [];
+        failedUploads.push({
+            entry,
+            timestamp: new Date().toISOString(),
+            error: error.message
+        });
+        localStorage.setItem('failedUploads', JSON.stringify(failedUploads));
+    }
+}
+
+async function saveToS3WithUserFolder(entry, username) {
+    const currentDate = new Date().toISOString().split('T')[0];
+    const token = await refreshCredentials();
+
+    try {
+        // Configure AWS
+        AWS.config.update({
+            region: 'eu-north-1',
+            credentials: new AWS.CognitoIdentityCredentials({
+                IdentityPoolId: 'eu-north-1:98c07095-e731-4219-bebe-db4dab892ea8',
+                Logins: {
+                    'cognito-idp.eu-north-1.amazonaws.com/eu-north-1_V9kLPNVXl': token
+                }
+            })
+        });
+
+        const s3 = new AWS.S3();
+        const bucketName = 'real-time-databucket';
+        const folderKey = `${username}/${currentDate}_aux_data.csv`;
+
+        // Try to get existing file
+        let existingContent;
+        try {
+            const existingFile = await s3.getObject({
+                Bucket: bucketName,
+                Key: folderKey
+            }).promise();
+            existingContent = existingFile.Body.toString('utf-8');
+        } catch (error) {
+            if (error.code === 'NoSuchKey') {
+                // Create new file with headers
+                existingContent = 'Date,Username,AUX Label,Time Spent,Project Title,Related Audits,Are You the PL?,Comment,Timestamp\n';
+            } else {
+                throw error;
+            }
+        }
+
+        // Create new row
+        const newRow = [
+            entry.date,
+            entry.username,
+            entry.auxLabel,
+            entry.timeSpent,
+            entry.projectTitle || '',
+            entry.relatedAudits || '',
+            entry.areYouPL ? `"${entry.areYouPL}"` : '',
+            entry.comment ? `"${entry.comment}"` : '',
+            entry.timestamp
+        ].join(',') + '\n';
+
+        // Combine and upload
+        await s3.putObject({
+            Bucket: bucketName,
+            Key: folderKey,
+            Body: existingContent + newRow,
+            ContentType: 'text/csv'
+        }).promise();
+
+        console.log('Successfully saved to S3:', folderKey);
+        localStorage.setItem('lastSuccessfulSync', new Date().toISOString());
+
+    } catch (error) {
+        console.error('Error saving to S3:', error);
+        throw error;
+    }
+}
+
+
+// Add a function to recover data from S3
+async function recoverDataFromS3() {
+    try {
+        const username = localStorage.getItem("currentUsername");
+        if (!username) {
+            throw new Error('No username found');
+        }
+
+        const token = await refreshCredentials();
+
+        AWS.config.update({
+            region: 'eu-north-1',
+            credentials: new AWS.CognitoIdentityCredentials({
+                IdentityPoolId: 'eu-north-1:98c07095-e731-4219-bebe-db4dab892ea8',
+                Logins: {
+                    'cognito-idp.eu-north-1.amazonaws.com/eu-north-1_V9kLPNVXl': token
+                }
+            })
+        });
+
+        const s3 = new AWS.S3();
+        const currentDate = new Date().toISOString().split('T')[0];
+        const folderKey = `${username}/${currentDate}_aux_data.csv`;
+
+        try {
+            const data = await s3.getObject({
+                Bucket: 'real-time-databucket',
+                Key: folderKey
+            }).promise();
+
+            const csvContent = data.Body.toString('utf-8');
+            const rows = csvContent.split('\n').slice(1); // Skip header
+            const recoveredData = rows.filter(row => row.trim()).map(row => {
+                const [date, username, auxLabel, timeSpent, projectTitle, relatedAudits, areYouPL, comment, timestamp] = row.split(',');
+                return {
+                    date,
+                    username,
+                    auxLabel,
+                    timeSpent: parseInt(timeSpent),
+                    projectTitle,
+                    relatedAudits,
+                    areYouPL: areYouPL.replace(/"/g, ''),
+                    comment: comment.replace(/"/g, ''),
+                    timestamp
+                };
+            });
+
+            return recoveredData;
+
+        } catch (error) {
+            if (error.code === 'NoSuchKey') {
+                console.log('No data found for today');
+                return [];
+            }
+            throw error;
+        }
+
+    } catch (error) {
+        console.error('Error recovering data:', error);
+        throw error;
+    }
+}
             // Function to display AUX data in a table
             function displayAUXData(showTable = false) {
                 let popupContainer = document.getElementById('auxTablePopup');
@@ -4373,6 +4537,12 @@ body {
          alt="Report a Bug"
          title="Report a Bug"
          style="width: 30px; height: 30px; cursor: pointer; margin: 5px 2px;">
+
+    <img id="recoveryButton"
+         src="https://raw.githubusercontent.com/Mofi-l/static-images/main/recovery.png"
+         alt="Report a Bug"
+         title="Report a Bug"
+         style="width: 30px; height: 30px; cursor: pointer; margin: 5px 2px;">
 `;
 
             const imagesToPreload = [
@@ -4400,6 +4570,29 @@ body {
                 const container = document.getElementById('action-buttons');
                 container.style.display = container.style.display === 'none' ? 'block' : 'none';
             });
+
+document.getElementById('recoveryButton').addEventListener('click', async function() {
+    SharedFunctions.showCustomConfirm(
+        'This will recover your data from AWS. Continue?',
+        async (confirmed) => {
+            if (confirmed) {
+                try {
+                    const recoveredData = await recoverDataFromS3();
+                    if (recoveredData && recoveredData.length > 0) {
+                        localStorage.setItem('auxData', JSON.stringify(recoveredData));
+                        displayAUXData(true);
+                        SharedFunctions.showCustomAlert('Data recovered successfully');
+                    } else {
+                        SharedFunctions.showCustomAlert('No data found to recover');
+                    }
+                } catch (error) {
+                    console.error('Error recovering data:', error);
+                    SharedFunctions.showCustomAlert('Failed to recover data: ' + error.message);
+                }
+            }
+        }
+    );
+});
             document.getElementById('exportToCSVButton').addEventListener('click', exportToCSV);
             document.getElementById('searchProjectTimeButton').addEventListener('click', searchProjectTime);
             document.getElementById('restoreCSVButton').addEventListener('click', function() {
@@ -9490,3 +9683,4 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 </body>
 </html>
+
