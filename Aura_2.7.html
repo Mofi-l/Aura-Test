@@ -1566,9 +1566,20 @@ async function saveAUXData(entry) {
             return;
         }
 
-        const timeSpentInSeconds = entry.timeSpent / 1000;
+        // Format time to HH:MM:SS
+        function formatTimeForStorage(timeInMs) {
+            const totalSeconds = Math.floor(timeInMs / 1000);
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 
-        // Save unique values
+        }
+
+        const timeSpentInSeconds = entry.timeSpent / 1000;
+        const formattedTime = formatTimeForStorage(entry.timeSpent);
+
+        // Save unique values (keeping original function)
         function saveUniqueValue(key, value) {
             let storedValues = JSON.parse(localStorage.getItem(key)) || [];
             if (value && !storedValues.includes(value)) {
@@ -1589,15 +1600,23 @@ async function saveAUXData(entry) {
             return;
         }
 
-        // Modified audit count handling
+        // Mo Modified audit count handling
         const wasPreviousConductProject = lastEntry &&
               lastEntry.auxLabel.toLowerCase().includes('conduct project');
 
-        // Always push audit count to previous entry if it was Conduct Project
         if (entry.relatedAudits && wasPreviousConductProject) {
             if (lastEntry) {
+                // Update last entry with audit count
                 lastEntry.relatedAudits = entry.relatedAudits;
                 auxData[auxData.length - 1] = lastEntry;
+
+                // Update the previous entry in S3
+                try {
+                    await updatePreviousEntryInS3(lastEntry, username);
+                } catch (error) {
+                    console.error('Error updating previous entry in S3:', error);
+                }
+
                 entry.relatedAudits = null; // Clear audit count from current entry
             }
         }
@@ -1613,7 +1632,7 @@ async function saveAUXData(entry) {
                     date: entry.date,
                     username,
                     auxLabel: entry.auxLabel,
-                    timeSpent: entry.timeSpent,
+                    timeSpent: formattedTime,
                     projectTitle: entry.projectTitle || localStorage.getItem('projectTitle-' + entry.auxLabel),
                     relatedAudits: entry.relatedAudits,
                     areYouPL: entry.areYouPL || localStorage.getItem('areYouPL-' + entry.auxLabel),
@@ -1635,7 +1654,7 @@ async function saveAUXData(entry) {
                 date: entry.date,
                 username,
                 auxLabel: entry.auxLabel,
-                timeSpent: entry.timeSpent,
+                timeSpent: formattedTime,
                 projectTitle: entry.projectTitle || localStorage.getItem('projectTitle-' + entry.auxLabel),
                 relatedAudits: entry.relatedAudits,
                 areYouPL: entry.areYouPL || localStorage.getItem('areYouPL-' + entry.auxLabel),
@@ -1648,11 +1667,9 @@ async function saveAUXData(entry) {
             await saveToS3WithUserFolder(newEntry, username);
             console.log('AUX Data saved:', newEntry);
 
-            // Update dashboard if open
             if (document.getElementById('aux-dashboard')) {
                 await updateDashboardData(true);
             }
-
         } else {
             console.log('Time spent is less than 5 seconds. Skipping entry.');
         }
@@ -1665,7 +1682,6 @@ async function saveAUXData(entry) {
                 await sendAuxUpdate();
             } catch (error) {
                 console.error('Failed to send update to AWS:', error);
-                // Add to pending uploads
                 const pendingUploads = JSON.parse(localStorage.getItem('pendingUploads')) || [];
                 pendingUploads.push(entry);
                 localStorage.setItem('pendingUploads', JSON.stringify(pendingUploads));
@@ -1676,7 +1692,6 @@ async function saveAUXData(entry) {
         console.error('Error in saveAUXData:', error);
         SharedFunctions.showCustomAlert('Failed to save AUX data: ' + error.message);
 
-        // Store failed entry for retry
         const failedUploads = JSON.parse(localStorage.getItem('failedUploads')) || [];
         failedUploads.push({
             entry,
@@ -1684,6 +1699,62 @@ async function saveAUXData(entry) {
             error: error.message
         });
         localStorage.setItem('failedUploads', JSON.stringify(failedUploads));
+    }
+}
+
+// Add this new function to update previous entries in S3
+async function updatePreviousEntryInS3(entry, username) {
+    const currentDate = new Date().toISOString().split('T')[0];
+    const token = await refreshCredentials();
+
+    try {
+        AWS.config.update({
+            region: 'eu-north-1',
+            credentials: new AWS.CognitoIdentityCredentials({
+                IdentityPoolId: 'eu-north-1:98c07095-e731-4219-bebe-db4dab892ea8',
+                Logins: {
+                    'cognito-idp.eu-north-1.amazonaws.com/eu-north-1_V9kLPNVXl': token
+                }
+            })
+        });
+
+        const s3 = new AWS.S3();
+        const bucketName = 'real-time-databucket';
+        const folderKey = `${username}/${currentDate}_aux_data.csv`;
+
+        // Get existing file
+        const existingFile = await s3.getObject({
+            Bucket: bucketName,
+            Key: folderKey
+        }).promise();
+
+        const csvContent = existingFile.Body.toString('utf-8');
+        const rows = csvContent.split('\n');
+        const headers = rows[0];
+
+        // Update the last Conduct Project entry with audit count
+        const updatedRows = rows.slice(1).map(row => {
+            const columns = row.split(',');
+            if (columns[2].toLowerCase().includes('conduct project')) {
+                columns[5] = entry.relatedAudits; // Update audit count
+            }
+            return columns.join(',');
+        });
+
+        // Combine and upload
+        const updatedContent = [headers, ...updatedRows].join('\n');
+        await s3.putObject({
+            Bucket: bucketName,
+            Key: folderKey,
+            Body: updatedContent,
+            ContentType: 'text/csv'
+        }).promise();
+
+        console.log('Successfully updated previous entry in S3');
+
+    } catch (error) {
+        console.error('Error updating previous entry in S3:', error);
+        throw error;
     }
 }
 
@@ -9683,5 +9754,6 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 </body>
 </html>
+
 
 
