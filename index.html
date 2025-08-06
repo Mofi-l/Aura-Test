@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Aura</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Aura - Project Time Management Tool">
+    
+    <!-- CSS Links -->
+    <link rel="stylesheet" href="css/styles.css">
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <!-- Flatpickr CSS for date picker -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <!-- Roboto Mono font for timer display -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Username Display Container -->
+    <div id="username-display"></div>
+
+    <!-- Main Widget Container -->
+    <div id="aux-widget">
+        <div class="particles"></div>
+        <div style="display: block;">
+            <!-- Level 1 Selection -->
+            <select id="aux-l1" onchange="handleL1Change(event)" aria-label="Select Level 1">
+                <option value="">Select L1</option>
+                <option value="1">Contact Handling</option>
+                <option value="2">On Break</option>
+                <option value="3">Microsite Project Work</option>
+                <option value="4">Non-Microsite Work</option>
+                <option value="5">Offline</option>
+            </select>
+
+            <!-- Containers for L2 and L3 dropdowns -->
+            <div id="aux-l2-container"></div>
+            <div id="aux-l3-container"></div>iv>
+
+            <!-- Timer Display -->
+            <div id="aux-timer" style="padding: 10px; margin-top: 10px; background: rgba(255, 255, 255, 0.8); border-radius: 5px;"></div>
+        </div>
+
+        <!-- Minimize Button -->
+        <div id="minimize-btn" style="cursor: pointer; position: absolute; top: -1px; right: 5px;" title="Created with ❤️ and a touch of ✨">
+            <img src="https://raw.githubusercontent.com/Mofi-l/static-images/main/Aura.png" style="width: 50px; height: 50px;" alt="Minimize">
+        </div>
+
+        <!-- Toggle Button -->
+        <button id="toggle-button" style="background: transparent; border: none; cursor: pointer; position: relative;" aria-label="Toggle Actions Menu">
+            <img src="https://raw.githubusercontent.com/Mofi-l/static-images/main/down.png" style="width: 15px; height: 15px;" alt="Toggle"/>
+        </button>
+
+        <!-- Pause Button -->
+        <button id="pause-button" class="pause-button">Pause</button>
+    </div>
+
+    <!-- Minimized Box -->
+    <div id="minimized-box" style="position: fixed; bottom: 10px; right: 10px; padding: 10px;px; background: rgba(0, 0, 0, 0.7); color: white; cursor: pointer; border-radius: 5px;" role="button" tabindex="0">
+        Maximize Aura
+    </div>
+
+    <!-- Action Buttons Container -->
+    <div id="action-buttons" style="display: none; margin-top: 10px;">
+        <!-- Export to CSV -->
+        <img id="exportToCSVButton"
+             src="https://raw.githubusercontent.com/Mofi-l/static-images/main/download(1).png"
+             alt="Download as CSV"
+             title="Download as CSV"
+             role="button"
+             tabindex="0">
+
+        <!-- Upload CSV -->
+        <img id="restoreCSVButton"
+             src="https://raw.githubusercontent.com/Mofi-l/static-images/main/upload.png"
+             alt="Upload edited CSV"
+                title="Upload edited CSV"
+             role="button"
+             tabindex="0">
+
+        <!-- Export to AWS -->
+        <img id="exportToAWSButton"
+             src="https://raw.githubusercontent.com/Mofi-l/static-images/main/cloud-computing.png"
+             alt="Export to AWS"
+             title="Export to AWS"
+             role="button"
+             tabindex="0">
+
+        <!-- Import from AWS -->
+        <img id="importFromAws"
+             src="https://raw.githubusercontent.com/Mofi-l/static-images/main/attachment.png"
+             alt="Import from AWS"
+             title="Import from AWS"
+             role="button"
+             tabindex="0">
+
+        <!-- Display AUX Data -->
+        <img id="displayAuxDataButton"
+             src="https://raw.githubusercontent.com/Mofi-l/static-images/main/table.png"
+             alt="Display AUX Data"
+             title="Display AUX Data"
+             role="button"
+             tabindex="0">
+
+        <!-- Clear Local Storage -->
+        <img id="clearLocalStorageButton"
+             src="https://raw.githubusercontent.com/Mofi-l/static-images/main/delete.png"
+             alt="Clear Local Storage"
+             title="Clear Local Storage"
+             role="button"
+             tabindex="0">
+
+        <!-- Search Project Time -->
+        <img id="searchProjectTimeButton"
+             src="https://raw.githubusercontent.com/Mofi-l/static-images/main/search.png"
+             alt="Search Project Time"
+             title="Search Project Time"
+             role="button"
+             tabindex="0">
+
+        <!-- Project Details -->
+        <img id="projectDetailsButton"
+             src="https://raw.githubusercontent.com/Mofi-l/static-images/main/project.png"
+             alt="Daily Project Details"
+             title="Daily Project Details"
+             role="button"
+             tabindex="0">
+
+        <!-- Get Full Data -->
+        <img id="getFullDataButton"
+             src="https://raw.githubusercontent.com/Mofi-l/static-images/main/database.png"
+             alt="Get Full NPT Data"
+             title="Get Full NPT Data"
+             role="button"
+             tabindex="0">
+
+        <!-- Dashboard -->
+        <img id="dashboardButton"
+             src="https://raw.githubusercontent.com/Mofi-l/static-images/main/dashboard.png"
+             alt="Dashboard"
+             title="Real-time Efficiency Tracker"
+             role="button"
+             tabindex="0">
+
+        <!-- Project Details Card -->
+        <img id="getProjectDetailsButton"
+             src="https://raw.githubusercontent.com/Mofi-l/static-images/main/project-management.png"
+             alt="Project Details Card"
+             title="Project Details Card"
+             role="button"
+             tabindex="0">
+
+        <!-- Flash Data -->
+        <img id="flashDataButton"
+             src="https://raw.githubusercontent.com/Mofi-l/static-images/main/database-table.png"
+             alt="Flash Data Dashboard"
+             title="Flash Data Dashboard"
+             role="button"
+             tabindex="0">
+
+        <!-- Aura Guidelines -->
+        <img id="auraGuidelines"
+             src="https://raw.githubusercontent.com/Mofi-l/static-images/main/guide.png"
+             alt="Aura Guide"
+             title="Aura Guide"
+             role="button"
+             tabindex="0">
+
+        <!-- Report Bug -->
+        <img id="reportBugImage"
+             src="https://raw.githubusercontent.com/Mofi-l/static-images/main/bug.png"
+             alt="Report a Bug"
+             title="Report a Bug"
+             role="button"
+             tabindex="0">
+
+        <!-- Recovery Button -->
+        <img id="recoveryButton"
+             src="https://raw.githubusercontent.com/Mofi-l/static-images/main/recovery.png"
+             alt="Recovery"
+             title="Recovery"
+             role="button"
+             tabindex="0">
+    </div>
+
+    <!-- Hidden File Input for CSV -->
+    <input type="file" id="csvFileInput" style="display: none;" accept=".csv">
+
+    <!-- Version Text -->
+    <div id="version-text" style="position: absolute; bottom: 10px; right: 10px; color: white; cursor: pointer; font-size: 12px;"></div>
+
+    <!-- Loading Indicator -->
+    <div id="loading-indicator" class="loading-indicator" style="display: none;">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Loading...</div>
+    </div>
+
+    <!-- Auth Modal Container -->
+    <div id="auth-modal-container"></div>
+
+    <!-- Error Boundary Container -->
+    <div id="error-boundary" class="error-boundary" style="display: none;">
+        <div class="error-content">
+            <h3>Something went wrong</h3>
+            <p id="error-message"></p>
+            <button onclick="window.location.reload()">Reload Page</button>
+        </div>
+    </div>
+
+    <!-- Offline Notice -->
+    <div id="offline-notice" class="offline-notice" style="display: none;">
+        You are currently offline. Some features may be unavailable.
+    </div>
+
+    <!-- JavaScript Dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1409.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/amazon-cognito-identity-js/5.2.1/amazon-cognito-identity.min.js"></script>
+    
+    <!-- Main Script -->
+    <script src="js/script.js"></script>
+</body>
+</html>
