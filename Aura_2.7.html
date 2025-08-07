@@ -9574,21 +9574,25 @@ ${auxState.startTime ? `Started: ${new Date(auxState.startTime).toLocaleTimeStri
                 // Store the current total pause duration before state change
                 const currentTotalPauseDuration = prevState ? prevState.totalPauseDuration || 0 : 0;
 
-                if (prevState && prevState.auxLabel !== newAuxLabel) {
-                    const timeSpent = prevState.isPaused ?
-                          (prevState.pauseTime - prevState.startTime) - (prevState.totalPauseDuration || 0) :
-                    (now - prevState.startTime) - (prevState.totalPauseDuration || 0);
+    if (prevState && prevState.auxLabel !== newAuxLabel) {
+        // Check specifically for "Conduct Project" (exact match)
+        const prevAuxParts = prevState.auxLabel.split(' - ');
+        const wasPreviousConductProject = prevAuxParts[2] === 'Conduct Project';
 
-                    await saveAUXData({
-                        auxLabel: prevState.auxLabel,
-                        timeSpent: timeSpent,
-                        date: formatDate(new Date()),
-                        projectTitle: localStorage.getItem('projectTitle-' + prevState.auxLabel),
-                        relatedAudits: localStorage.getItem('relatedAudits-' + prevState.auxLabel),
-                        areYouPL: localStorage.getItem('areYouPL-' + prevState.auxLabel),
-                        comment: localStorage.getItem('comment-' + prevState.auxLabel)
-                    });
-                }
+        const timeSpent = prevState.isPaused ?
+            (prevState.pauseTime - prevState.startTime) - (prevState.totalPauseDuration || 0) :
+            (now - prevState.startTime) - (prevState.totalPauseDuration || 0);
+
+        await saveAUXData({
+            auxLabel: prevState.auxLabel,
+            timeSpent: timeSpent,
+            date: formatDate(new Date()),
+            projectTitle: localStorage.getItem('projectTitle-' + prevState.auxLabel),
+            relatedAudits: wasPreviousConductProject ? localStorage.getItem('relatedAudits-' + prevState.auxLabel) : null,
+            areYouPL: localStorage.getItem('areYouPL-' + prevState.auxLabel),
+            comment: localStorage.getItem('comment-' + prevState.auxLabel)
+        });
+    }
 
                 if (!prevState || prevState.auxLabel !== newAuxLabel) {
                     cleanupTimer();
@@ -9703,6 +9707,7 @@ ${auxState.startTime ? `Started: ${new Date(auxState.startTime).toLocaleTimeStri
 </script>
 </body>
 </html>
+
 
 
 
