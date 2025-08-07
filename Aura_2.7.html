@@ -6797,33 +6797,24 @@ ${update.isPaused ? `Paused Since: ${new Date(update.pauseTime).toLocaleString()
             ///////////////////////////////////////////////////////////////
             //POP-UP Function//
             async function showCombinedPopup(auxLabel, callback) {
-                if (!isTabFocused) return;
-                console.log('showCombinedPopup function called');
+    if (!isTabFocused) return;
+    console.log('showCombinedPopup function called');
 
-                const auxData = JSON.parse(localStorage.getItem('auxData')) || [];
-                const previousEntry = auxData[auxData.length - 1];
+    const auxData = JSON.parse(localStorage.getItem('auxData')) || [];
+    const previousEntry = auxData[auxData.length - 1];
 
-                const wasPreviousConductProject = previousEntry &&
-                      previousEntry.auxLabel &&
-                      previousEntry.auxLabel.split(' - ').some(part => 
-                                                               part.trim() === 'Conduct Project'
-                                                              );
+    // Get the L3 value from the previous entry's AUX label
+    const previousL3 = previousEntry?.auxLabel?.split(' - ')[2]?.trim();
+    
+    // Check specifically if the previous L3 was exactly "Conduct Project"
+    const wasPreviousConductProject = previousL3 === 'Conduct Project';
 
-                // Define currentLabel from the passed auxLabel parameter
-                const currentLabel = auxLabel;
-                const isCurrentConductProject = currentLabel &&
-                      currentLabel.split(' - ').some(part => 
-                                                     part.trim() === 'Conduct Project'
-                                                    );
-
-                // Add debug logging
-                console.log('AUX State:', {
-                    previousEntry,
-                    previousAuxLabel: previousEntry?.auxLabel,
-                    wasPreviousConductProject,
-                    currentLabel,
-                    isCurrentConductProject
-                });
+    // Log for debugging
+    console.log('Previous Entry Check:', {
+        previousEntryLabel: previousEntry?.auxLabel,
+        previousL3,
+        wasPreviousConductProject
+    });
 
                 const styles = document.createElement('style');
                 styles.textContent = `
@@ -7074,24 +7065,24 @@ ${update.isPaused ? `Paused Since: ${new Date(update.pauseTime).toLocaleString()
                     >
                 </div>
 
-<div class="input-field">
-    <label for="relatedAudits">Audit Counts ${wasPreviousConductProject && !isCurrentConductProject ? '*' : ''}</label>
-    <input
-        type="number"
-        id="relatedAudits"
-        name="relatedAudits"
-        placeholder="${wasPreviousConductProject && !isCurrentConductProject ? 'Enter number of audits' : 'Audit count not required'}"
-        min="0"
-        ${wasPreviousConductProject && !isCurrentConductProject ? 'required' : ''}
-        ${!wasPreviousConductProject || isCurrentConductProject ? 'disabled' : ''}
-        ${!wasPreviousConductProject || isCurrentConductProject ? 'style="background-color: #f5f5f5;"' : ''}
-        onkeypress="return (event.charCode >= 48 && event.charCode <= 57)"
-        oninput="this.value = this.value.replace(/[^0-9]/g, '')"
-    >
-    ${!wasPreviousConductProject || isCurrentConductProject ?
-        '<small style="color: #666; display: block; margin-top: 5px;">Audit count is only required after "Conduct Project"</small>'
-    : ''}
-</div>
+                <div class="input-field">
+                    <label for="relatedAudits">Audit Counts ${wasPreviousConductProject ? '*' : ''}</label>
+                    <input
+                        type="number"
+                        id="relatedAudits"
+                        name="relatedAudits"
+                        placeholder="${wasPreviousConductProject ? 'Enter number of audits' : 'Audit count not required'}"
+                        min="0"
+                        ${wasPreviousConductProject ? 'required' : ''}
+                        ${!wasPreviousConductProject ? 'disabled' : ''}
+                        ${!wasPreviousConductProject ? 'style="background-color: #f5f5f5;"' : ''}
+                        onkeypress="return (event.charCode >= 48 && event.charCode <= 57)"
+                        oninput="this.value = this.value.replace(/[^0-9]/g, '')"
+                    >
+                    ${!wasPreviousConductProject ?
+                        '<small style="color: #666; display: block; margin-top: 5px;">Audit count is only required after "Conduct Project"</small>'
+                    : ''}
+                </div>
 
             <div class="input-field">
                 <label for="comment-text">Comment</label>
@@ -9712,6 +9703,7 @@ ${auxState.startTime ? `Started: ${new Date(auxState.startTime).toLocaleTimeStri
 </script>
 </body>
 </html>
+
 
 
 
