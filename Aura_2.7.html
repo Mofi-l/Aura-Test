@@ -9101,55 +9101,54 @@ ${update.isPaused ? `Paused Since: ${new Date(update.pauseTime).toLocaleString()
                 return timerElement;
             }
 
-            function updateTimer(startTime, auxLabel, timerElement) {
-                if (animationFrameId) {
-                    cancelAnimationFrame(animationFrameId);
-                }
+function updateTimer(startTime, auxLabel, timerElement) {
+    if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+    }
 
-                const auxState = JSON.parse(localStorage.getItem('auxState')) || {};
-                const currentTime = Date.now();
-                let elapsedTime;
+    const auxState = JSON.parse(localStorage.getItem('auxState')) || {};
+    const currentTime = Date.now();
+    let elapsedTime;
 
-                if (auxState.isPaused) {
-                    // If paused, use the pause time to calculate elapsed time
-                    elapsedTime = auxState.pauseTime - startTime - (auxState.totalPauseDuration || 0);
-                } else {
-                    // If not paused, calculate current elapsed time
-                    elapsedTime = currentTime - startTime - (auxState.totalPauseDuration || 0);
-                }
+    if (auxState.isPaused) {
+        // If paused, use the pause time to calculate elapsed time
+        elapsedTime = auxState.pauseTime - startTime - (auxState.totalPauseDuration || 0);
+    } else {
+        // If not paused, calculate current elapsed time
+        elapsedTime = currentTime - startTime - (auxState.totalPauseDuration || 0);
+    }
 
-                // Ensure elapsed time is never negative
-                elapsedTime = Math.max(0, elapsedTime);
+    // Ensure elapsed time is never negative
+    elapsedTime = Math.max(0, elapsedTime);
 
-                const cleanedAuxLabel = auxLabel.replace(/\s*-\s*N\/A\s*/g, '').trim();
-                const auxParts = cleanedAuxLabel.split(' - ').filter(part => part.trim() !== '');
-                let displayedAuxLabel = auxParts[auxParts.length - 1] || 'No AUX available';
+    const cleanedAuxLabel = auxLabel.replace(/\s*-\s*N\/A\s*/g, '').trim();
+    const auxParts = cleanedAuxLabel.split(' - ').filter(part => part.trim() !== '');
+    let displayedAuxLabel = auxParts[auxParts.length - 1] || 'No AUX available';
 
-                // Update timer display
-                if (timerElement) {
-                    let displayText = `${displayedAuxLabel} : ${formatTime(elapsedTime)}`;
-                    if (auxState.isPaused) {
-                        displayText += ' (Paused)';
-                    }
-                    timerElement.textContent = displayText;
-                    timerElement.title = `Current AUX: ${cleanedAuxLabel}`;
-                }
+    // Update timer display
+    if (timerElement) {
+        let displayText = `${displayedAuxLabel} : ${formatTime(elapsedTime)}`;
+        if (auxState.isPaused) {
+            displayText += ' (Paused)';
+        }
+        timerElement.textContent = displayText;
+        timerElement.title = `Current AUX: ${cleanedAuxLabel}`;
+    }
 
-                // Store current state
-                auxState.currentTime = elapsedTime;
-                auxState.lastUpdate = currentTime;
-                localStorage.setItem('auxState', JSON.stringify(auxState));
+    // Store current state
+    auxState.currentTime = elapsedTime;
+    auxState.lastUpdate = currentTime;
+    localStorage.setItem('auxState', JSON.stringify(auxState));
 
-                animationFrameId = requestAnimationFrame(() => updateTimer(startTime, auxLabel, timerElement));
+    animationFrameId = requestAnimationFrame(() => updateTimer(startTime, auxLabel, timerElement));
 
-                // Continue animation frame only if not paused
-                if (!auxState.isPaused) {
-                    animationFrameId = requestAnimationFrame(() => updateTimer(startTime, auxLabel, timerElement));
-                }
+    // Continue animation frame only if not paused
+    if (!auxState.isPaused) {
+        animationFrameId = requestAnimationFrame(() => updateTimer(startTime, auxLabel, timerElement));
+    }
 
-                return elapsedTime;
-            }
-
+    return elapsedTime;
+}
 
             // Add this new function
             function updateDashboardTimers() {
@@ -9557,22 +9556,22 @@ ${auxState.startTime ? `Started: ${new Date(auxState.startTime).toLocaleTimeStri
                 }
             });
 
-            async function handleAuxStateChange(newAuxLabel) {
-                console.log(`handleAuxStateChange called with: ${newAuxLabel}`);
-                console.log(`isInitialLoad: ${isInitialLoad}`);
-                console.log(`Current time: ${new Date().toISOString()}`);
+async function handleAuxStateChange(newAuxLabel) {
+    console.log(`handleAuxStateChange called with: ${newAuxLabel}`);
+    console.log(`isInitialLoad: ${isInitialLoad}`);
+    console.log(`Current time: ${new Date().toISOString()}`);
 
-                if (isInitialLoad) {
-                    console.log('Skipping AUX state change during initial load');
-                    console.trace();
-                    return;
-                }
+    if (isInitialLoad) {
+        console.log('Skipping AUX state change during initial load');
+        console.trace();
+        return;
+    }
 
-                const prevState = JSON.parse(localStorage.getItem('auxState'));
-                const now = Date.now();
+    const prevState = JSON.parse(localStorage.getItem('auxState'));
+    const now = Date.now();
 
-                // Store the current total pause duration before state change
-                const currentTotalPauseDuration = prevState ? prevState.totalPauseDuration || 0 : 0;
+    // Store the current total pause duration before state change
+    const currentTotalPauseDuration = prevState ? prevState.totalPauseDuration || 0 : 0;
 
     if (prevState && prevState.auxLabel !== newAuxLabel) {
         // Check specifically for "Conduct Project" (exact match)
@@ -9592,45 +9591,51 @@ ${auxState.startTime ? `Started: ${new Date(auxState.startTime).toLocaleTimeStri
             areYouPL: localStorage.getItem('areYouPL-' + prevState.auxLabel),
             comment: localStorage.getItem('comment-' + prevState.auxLabel)
         });
+
+        // Trigger audit count prompt if switching from Conduct Project
+        if (wasPreviousConductProject) {
+            showCombinedPopup(newAuxLabel, (auditData) => {
+                console.log('Audit data submitted:', auditData);
+            });
+        }
     }
 
-                if (!prevState || prevState.auxLabel !== newAuxLabel) {
-                    cleanupTimer();
+    if (!prevState || prevState.auxLabel !== newAuxLabel) {
+        cleanupTimer();
 
-                    // Create new state
-                    const newState = {
-                        auxLabel: newAuxLabel,
-                        startTime: now,
-                        timestamp: now,
-                        isPaused: false,
-                        totalPauseDuration: 0 // Reset pause duration for new AUX
-                    };
+        // Create new state
+        const newState = {
+            auxLabel: newAuxLabel,
+            startTime: now,
+            timestamp: now,
+            isPaused: false,
+            totalPauseDuration: 0 // Reset pause duration for new AUX
+        };
 
-                    // Store the new state
-                    localStorage.setItem('auxState', JSON.stringify(newState));
+        // Store the new state
+        localStorage.setItem('auxState', JSON.stringify(newState));
 
-                    // Start the timer immediately
-                    const timerElement = displayTimer();
-                    if (timerElement) {
-                        updateTimer(now, newAuxLabel, timerElement);
-                    }
-                }
+        // Start the timer immediately
+        const timerElement = displayTimer();
+        if (timerElement) {
+            updateTimer(now, newAuxLabel, timerElement);
+        }
+    }
 
-                // Ensure pause duration is maintained when going offline
-                if (newAuxLabel.toLowerCase().includes('offline')) {
-                    const currentState = JSON.parse(localStorage.getItem('auxState'));
-                    currentState.totalPauseDuration = currentTotalPauseDuration;
-                    localStorage.setItem('auxState', JSON.stringify(currentState));
-                }
+    // Ensure pause duration is maintained when going offline
+    if (newAuxLabel.toLowerCase().includes('offline')) {
+        const currentState = JSON.parse(localStorage.getItem('auxState'));
+        currentState.totalPauseDuration = currentTotalPauseDuration;
+        localStorage.setItem('auxState', JSON.stringify(currentState));
+    }
 
-                await sendAuxUpdate();
-                await sendAuxUpdateWithRetry();
+    await sendAuxUpdate();
+    await sendAuxUpdateWithRetry();
 
-                if (document.getElementById('aux-dashboard')) {
-                    await updateDashboardData(true);
-                }
-            }
-
+    if (document.getElementById('aux-dashboard')) {
+        await updateDashboardData(true);
+    }
+}
 
             SharedFunctions.injectAuthStyles();
             addFileInput();
@@ -9707,6 +9712,7 @@ ${auxState.startTime ? `Started: ${new Date(auxState.startTime).toLocaleTimeStri
 </script>
 </body>
 </html>
+
 
 
 
