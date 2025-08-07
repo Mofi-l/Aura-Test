@@ -6809,13 +6809,6 @@ ${update.isPaused ? `Paused Since: ${new Date(update.pauseTime).toLocaleString()
     // Check specifically if the previous L3 was exactly "Conduct Project"
     const wasPreviousConductProject = previousL3 === 'Conduct Project';
 
-    // Log for debugging
-    console.log('Previous Entry Check:', {
-        previousEntryLabel: previousEntry?.auxLabel,
-        previousL3,
-        wasPreviousConductProject
-    });
-
                 const styles = document.createElement('style');
                 styles.textContent = `
         #combined-popup {
@@ -7065,24 +7058,22 @@ ${update.isPaused ? `Paused Since: ${new Date(update.pauseTime).toLocaleString()
                     >
                 </div>
 
-                <div class="input-field">
-                    <label for="relatedAudits">Audit Counts ${wasPreviousConductProject ? '*' : ''}</label>
-                    <input
-                        type="number"
-                        id="relatedAudits"
-                        name="relatedAudits"
-                        placeholder="${wasPreviousConductProject ? 'Enter number of audits' : 'Audit count not required'}"
-                        min="0"
-                        ${wasPreviousConductProject ? 'required' : ''}
-                        ${!wasPreviousConductProject ? 'disabled' : ''}
-                        ${!wasPreviousConductProject ? 'style="background-color: #f5f5f5;"' : ''}
-                        onkeypress="return (event.charCode >= 48 && event.charCode <= 57)"
-                        oninput="this.value = this.value.replace(/[^0-9]/g, '')"
-                    >
-                    ${!wasPreviousConductProject ?
-                        '<small style="color: #666; display: block; margin-top: 5px;">Audit count is only required after "Conduct Project"</small>'
-                    : ''}
-                </div>
+        <div class="input-field">
+            <label for="relatedAudits">Audit Counts ${wasPreviousConductProject ? '*' : ''}</label>
+            <input
+                type="number"
+                id="relatedAudits"
+                name="relatedAudits"
+                placeholder="${wasPreviousConductProject ? 'Enter number of audits' : 'Audit count not required'}"
+                min="0"
+                ${wasPreviousConductProject ? 'required' : ''}
+                ${!wasPreviousConductProject ? 'disabled' : ''}
+                ${!wasPreviousConductProject ? 'style="background-color: #f5f5f5;"' : ''}
+            >
+            ${!wasPreviousConductProject ? 
+                '<small style="color: #666; display: block; margin-top: 5px;">Audit count is only required after "Conduct Project"</small>'
+                : ''}
+        </div>
 
             <div class="input-field">
                 <label for="comment-text">Comment</label>
@@ -9577,6 +9568,9 @@ async function handleAuxStateChange(newAuxLabel) {
         // Check specifically for "Conduct Project" (exact match)
         const prevAuxParts = prevState.auxLabel.split(' - ');
         const wasPreviousConductProject = prevAuxParts[2] === 'Conduct Project';
+        
+        // Check if coming from "Non Conduct Project"
+        const wasNonConductProject = prevAuxParts[2] === 'Non Conduct Project';
 
         const timeSpent = prevState.isPaused ?
             (prevState.pauseTime - prevState.startTime) - (prevState.totalPauseDuration || 0) :
@@ -9592,30 +9586,31 @@ async function handleAuxStateChange(newAuxLabel) {
             comment: localStorage.getItem('comment-' + prevState.auxLabel)
         });
 
-        // Trigger audit count prompt if switching from Conduct Project
-        if (wasPreviousConductProject) {
-            showCombinedPopup(newAuxLabel, (auditData) => {
-                console.log('Audit data submitted:', auditData);
-            });
-        }
-    }
-
-    if (!prevState || prevState.auxLabel !== newAuxLabel) {
-        cleanupTimer();
-
-        // Create new state
+        // Create new state before showing popup
         const newState = {
             auxLabel: newAuxLabel,
             startTime: now,
             timestamp: now,
             isPaused: false,
-            totalPauseDuration: 0 // Reset pause duration for new AUX
+            totalPauseDuration: 0
         };
 
         // Store the new state
         localStorage.setItem('auxState', JSON.stringify(newState));
 
-        // Start the timer immediately
+        // Show popup only once and only if coming from Conduct Project
+        if (wasPreviousConductProject && !wasNonConductProject) {
+            await showCombinedPopup(newAuxLabel, (auditData) => {
+                console.log('Audit data submitted:', auditData);
+            });
+        } else {
+            // For all other transitions, show popup without audit count
+            if (!isInitialLoad) {
+                await showCombinedPopup(newAuxLabel, null);
+            }
+        }
+
+        // Start the timer
         const timerElement = displayTimer();
         if (timerElement) {
             updateTimer(now, newAuxLabel, timerElement);
@@ -9712,6 +9707,7 @@ async function handleAuxStateChange(newAuxLabel) {
 </script>
 </body>
 </html>
+
 
 
 
