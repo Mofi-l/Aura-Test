@@ -9551,74 +9551,96 @@ ${auxState.startTime ? `Started: ${new Date(auxState.startTime).toLocaleTimeStri
             });
 
 async function handleAuxStateChange(newAuxLabel) {
-                console.log(`handleAuxStateChange called with: ${newAuxLabel}`);
-                console.log(`isInitialLoad: ${isInitialLoad}`);
-                console.log(`Current time: ${new Date().toISOString()}`);
+    console.log(`handleAuxStateChange called with: ${newAuxLabel}`);
+    console.log(`isInitialLoad: ${isInitialLoad}`);
+    console.log(`Current time: ${new Date().toISOString()}`);
 
-                if (isInitialLoad) {
-                    console.log('Skipping AUX state change during initial load');
-                    console.trace();
-                    return;
-                }
+    if (isInitialLoad) {
+        console.log('Skipping AUX state change during initial load');
+        console.trace();
+        return;
+    }
 
-                const prevState = JSON.parse(localStorage.getItem('auxState'));
-                const now = Date.now();
+    const prevState = JSON.parse(localStorage.getItem('auxState'));
+    const now = Date.now();
 
-                // Store the current total pause duration before state change
-                const currentTotalPauseDuration = prevState ? prevState.totalPauseDuration || 0 : 0;
+    // Check if previous AUX was "Conduct Project"
+    const wasPreviousConductProject = prevState && 
+                                    prevState.auxLabel && 
+                                    prevState.auxLabel.toLowerCase().includes('conduct project');
 
-                if (prevState && prevState.auxLabel !== newAuxLabel) {
-                    const timeSpent = prevState.isPaused ?
-                          (prevState.pauseTime - prevState.startTime) - (prevState.totalPauseDuration || 0) :
-                    (now - prevState.startTime) - (prevState.totalPauseDuration || 0);
+    // Check if current AUX is not "Conduct Project"
+    const isCurrentNotConductProject = !newAuxLabel.toLowerCase().includes('conduct project');
 
-                    await saveAUXData({
-                        auxLabel: prevState.auxLabel,
-                        timeSpent: timeSpent,
-                        date: formatDate(new Date()),
-                        projectTitle: localStorage.getItem('projectTitle-' + prevState.auxLabel),
-                        relatedAudits: localStorage.getItem('relatedAudits-' + prevState.auxLabel),
-                        areYouPL: localStorage.getItem('areYouPL-' + prevState.auxLabel),
-                        comment: localStorage.getItem('comment-' + prevState.auxLabel)
-                    });
-                }
+    // Store the current total pause duration before state change
+    const currentTotalPauseDuration = prevState ? prevState.totalPauseDuration || 0 : 0;
 
-                if (!prevState || prevState.auxLabel !== newAuxLabel) {
-                    cleanupTimer();
+    if (prevState && prevState.auxLabel !== newAuxLabel) {
+        const timeSpent = prevState.isPaused ?
+            (prevState.pauseTime - prevState.startTime) - (prevState.totalPauseDuration || 0) :
+            (now - prevState.startTime) - (prevState.totalPauseDuration || 0);
 
-                    // Create new state
-                    const newState = {
-                        auxLabel: newAuxLabel,
-                        startTime: now,
-                        timestamp: now,
-                        isPaused: false,
-                        totalPauseDuration: 0 // Reset pause duration for new AUX
-                    };
+        // If transitioning from Conduct Project to anything else, show popup
+        if (wasPreviousConductProject && isCurrentNotConductProject && !isInitialLoad) {
+            await showCombinedPopup(newAuxLabel, (auditData) => {
+                saveAUXData({
+                    auxLabel: prevState.auxLabel,
+                    timeSpent: timeSpent,
+                    date: formatDate(new Date()),
+                    projectTitle: auditData.projectTitle,
+                    relatedAudits: auditData.relatedAudits,
+                    areYouPL: auditData.areYouPL,
+                    comment: auditData.comment
+                });
+            });
+        } else {
+            await saveAUXData({
+                auxLabel: prevState.auxLabel,
+                timeSpent: timeSpent,
+                date: formatDate(new Date()),
+                projectTitle: localStorage.getItem('projectTitle-' + prevState.auxLabel),
+                relatedAudits: localStorage.getItem('relatedAudits-' + prevState.auxLabel),
+                areYouPL: localStorage.getItem('areYouPL-' + prevState.auxLabel),
+                comment: localStorage.getItem('comment-' + prevState.auxLabel)
+            });
+        }
+    }
 
-                    // Store the new state
-                    localStorage.setItem('auxState', JSON.stringify(newState));
+    if (!prevState || prevState.auxLabel !== newAuxLabel) {
+        cleanupTimer();
 
-                    // Start the timer immediately
-                    const timerElement = displayTimer();
-                    if (timerElement) {
-                        updateTimer(now, newAuxLabel, timerElement);
-                    }
-                }
+        // Create new state
+        const newState = {
+            auxLabel: newAuxLabel,
+            startTime: now,
+            timestamp: now,
+            isPaused: false,
+            totalPauseDuration: 0
+        };
 
-                // Ensure pause duration is maintained when going offline
-                if (newAuxLabel.toLowerCase().includes('offline')) {
-                    const currentState = JSON.parse(localStorage.getItem('auxState'));
-                    currentState.totalPauseDuration = currentTotalPauseDuration;
-                    localStorage.setItem('auxState', JSON.stringify(currentState));
-                }
+        localStorage.setItem('auxState', JSON.stringify(newState));
 
-                await sendAuxUpdate();
-                await sendAuxUpdateWithRetry();
+        const timerElement = displayTimer();
+        if (timerElement) {
+            updateTimer(now, newAuxLabel, timerElement);
+        }
+    }
 
-                if (document.getElementById('aux-dashboard')) {
-                    await updateDashboardData(true);
-                }
-            }
+    // Ensure pause duration is maintained when going offline
+    if (newAuxLabel.toLowerCase().includes('offline')) {
+        const currentState = JSON.parse(localStorage.getItem('auxState'));
+        currentState.totalPauseDuration = currentTotalPauseDuration;
+        localStorage.setItem('auxState', JSON.stringify(currentState));
+    }
+
+    await sendAuxUpdate();
+    await sendAuxUpdateWithRetry();
+
+    if (document.getElementById('aux-dashboard')) {
+        await updateDashboardData(true);
+    }
+}
+
 
             SharedFunctions.injectAuthStyles();
             addFileInput();
@@ -9695,18 +9717,3 @@ async function handleAuxStateChange(newAuxLabel) {
 </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
