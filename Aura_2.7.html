@@ -9551,84 +9551,74 @@ ${auxState.startTime ? `Started: ${new Date(auxState.startTime).toLocaleTimeStri
             });
 
 async function handleAuxStateChange(newAuxLabel) {
-    console.log(`handleAuxStateChange called with: ${newAuxLabel}`);
-    console.log(`isInitialLoad: ${isInitialLoad}`);
-    console.log(`Current time: ${new Date().toISOString()}`);
+                console.log(`handleAuxStateChange called with: ${newAuxLabel}`);
+                console.log(`isInitialLoad: ${isInitialLoad}`);
+                console.log(`Current time: ${new Date().toISOString()}`);
 
-    if (isInitialLoad) {
-        console.log('Skipping AUX state change during initial load');
-        console.trace();
-        return;
-    }
+                if (isInitialLoad) {
+                    console.log('Skipping AUX state change during initial load');
+                    console.trace();
+                    return;
+                }
 
-    const prevState = JSON.parse(localStorage.getItem('auxState'));
-    const now = Date.now();
+                const prevState = JSON.parse(localStorage.getItem('auxState'));
+                const now = Date.now();
 
-    // Store the current total pause duration before state change
-    const currentTotalPauseDuration = prevState ? prevState.totalPauseDuration || 0 : 0;
+                // Store the current total pause duration before state change
+                const currentTotalPauseDuration = prevState ? prevState.totalPauseDuration || 0 : 0;
 
-    if (prevState && prevState.auxLabel !== newAuxLabel) {
-        // Check specifically for "Conduct Project" (exact match)
-        const prevAuxParts = prevState.auxLabel.split(' - ');
-        const wasPreviousConductProject = prevAuxParts[2] === 'Conduct Project';
+                if (prevState && prevState.auxLabel !== newAuxLabel) {
+                    const timeSpent = prevState.isPaused ?
+                          (prevState.pauseTime - prevState.startTime) - (prevState.totalPauseDuration || 0) :
+                    (now - prevState.startTime) - (prevState.totalPauseDuration || 0);
 
-        const timeSpent = prevState.isPaused ?
-            (prevState.pauseTime - prevState.startTime) - (prevState.totalPauseDuration || 0) :
-            (now - prevState.startTime) - (prevState.totalPauseDuration || 0);
+                    await saveAUXData({
+                        auxLabel: prevState.auxLabel,
+                        timeSpent: timeSpent,
+                        date: formatDate(new Date()),
+                        projectTitle: localStorage.getItem('projectTitle-' + prevState.auxLabel),
+                        relatedAudits: localStorage.getItem('relatedAudits-' + prevState.auxLabel),
+                        areYouPL: localStorage.getItem('areYouPL-' + prevState.auxLabel),
+                        comment: localStorage.getItem('comment-' + prevState.auxLabel)
+                    });
+                }
 
-        await saveAUXData({
-            auxLabel: prevState.auxLabel,
-            timeSpent: timeSpent,
-            date: formatDate(new Date()),
-            projectTitle: localStorage.getItem('projectTitle-' + prevState.auxLabel),
-            relatedAudits: wasPreviousConductProject ? localStorage.getItem('relatedAudits-' + prevState.auxLabel) : null,
-            areYouPL: localStorage.getItem('areYouPL-' + prevState.auxLabel),
-            comment: localStorage.getItem('comment-' + prevState.auxLabel)
-        });
+                if (!prevState || prevState.auxLabel !== newAuxLabel) {
+                    cleanupTimer();
 
-        // Trigger audit count prompt only if switching from Conduct Project
-        if (wasPreviousConductProject) {
-            await showCombinedPopup(newAuxLabel, (auditData) => {
-                console.log('Audit data submitted:', auditData);
-            });
-        } else {
-            // For all other transitions, show popup without audit count
-            await showCombinedPopup(newAuxLabel, null);
-        }
-    }
+                    // Create new state
+                    const newState = {
+                        auxLabel: newAuxLabel,
+                        startTime: now,
+                        timestamp: now,
+                        isPaused: false,
+                        totalPauseDuration: 0 // Reset pause duration for new AUX
+                    };
 
-    // Create new state
-    const newState = {
-        auxLabel: newAuxLabel,
-        startTime: now,
-        timestamp: now,
-        isPaused: false,
-        totalPauseDuration: 0 // Reset pause duration for new AUX
-    };
+                    // Store the new state
+                    localStorage.setItem('auxState', JSON.stringify(newState));
 
-    // Store the new state
-    localStorage.setItem('auxState', JSON.stringify(newState));
+                    // Start the timer immediately
+                    const timerElement = displayTimer();
+                    if (timerElement) {
+                        updateTimer(now, newAuxLabel, timerElement);
+                    }
+                }
 
-    // Start the timer immediately
-    const timerElement = displayTimer();
-    if (timerElement) {
-        updateTimer(now, newAuxLabel, timerElement);
-    }
+                // Ensure pause duration is maintained when going offline
+                if (newAuxLabel.toLowerCase().includes('offline')) {
+                    const currentState = JSON.parse(localStorage.getItem('auxState'));
+                    currentState.totalPauseDuration = currentTotalPauseDuration;
+                    localStorage.setItem('auxState', JSON.stringify(currentState));
+                }
 
-    // Ensure pause duration is maintained when going offline
-    if (newAuxLabel.toLowerCase().includes('offline')) {
-        const currentState = JSON.parse(localStorage.getItem('auxState'));
-        currentState.totalPauseDuration = currentTotalPauseDuration;
-        localStorage.setItem('auxState', JSON.stringify(currentState));
-    }
+                await sendAuxUpdate();
+                await sendAuxUpdateWithRetry();
 
-    await sendAuxUpdate();
-    await sendAuxUpdateWithRetry();
-
-    if (document.getElementById('aux-dashboard')) {
-        await updateDashboardData(true);
-    }
-}
+                if (document.getElementById('aux-dashboard')) {
+                    await updateDashboardData(true);
+                }
+            }
 
             SharedFunctions.injectAuthStyles();
             addFileInput();
@@ -9705,6 +9695,7 @@ async function handleAuxStateChange(newAuxLabel) {
 </script>
 </body>
 </html>
+
 
 
 
