@@ -6815,6 +6815,7 @@ ${update.isPaused ? `Paused Since: ${new Date(update.pauseTime).toLocaleString()
         previousL3,
         wasPreviousConductProject
     });
+
                 const styles = document.createElement('style');
                 styles.textContent = `
         #combined-popup {
@@ -7125,73 +7126,72 @@ ${update.isPaused ? `Paused Since: ${new Date(update.pauseTime).toLocaleString()
     `;
                 document.body.appendChild(popup);
 
-                const auditInput = document.getElementById('relatedAudits');
+     const auditInput = document.getElementById('relatedAudits');
 
-                auditInput.addEventListener('input', function(e) {
-                    this.value = this.value.replace(/[^0-9]/g, '');
+    auditInput.addEventListener('input', function(e) {
+        this.value = this.value.replace(/[^0-9]/g, '');
 
-                    if (this.value < 0) {
-                        this.value = 0;
-                    }
-                });
+        if (this.value < 0) {
+            this.value = 0;
+        }
+    });
 
-                auditInput.addEventListener('keypress', function(e) {
-                    if (e.charCode < 48 || e.charCode > 57) {
-                        e.preventDefault();
-                    }
-                });
+    auditInput.addEventListener('keypress', function(e) {
+        if (e.charCode < 48 || e.charCode > 57) {
+            e.preventDefault();
+        }
+    });
 
+    // Add event listeners for submit and cancel buttons
+    document.getElementById('submit-btn').addEventListener('click', function() {
+        const auditInput = document.getElementById('relatedAudits');
+        const auditCount = auditInput.value;
 
-                document.getElementById('submit-btn').addEventListener('click', function() {
-                    const auditInput = document.getElementById('relatedAudits');
-                    const auditCount = auditInput.value;
+        if (wasPreviousConductProject) {
+            if (!auditCount || isNaN(auditCount) || auditCount < 0) {
+                SharedFunctions.showCustomAlert('Please enter a valid number for audit counts');
+                return;
+            }
+        }
 
-                    if (enableAuditCount) {
-                        if (!auditCount || isNaN(auditCount) || auditCount < 0) {
-                            SharedFunctions.showCustomAlert('Please enter a valid number for audit counts');
-                            return;
-                        }
-                    }
+        if (validateInputs()) {
+            submitCombinedData(auxLabel, callback);
+            closePopup();
+        } else {
+            SharedFunctions.showCustomAlert('Please fill in all required fields');
+        }
+    });
 
-                    if (validateInputs()) {
-                        submitCombinedData(auxLabel, callback);
-                        closePopup();
-                    } else {
-                        SharedFunctions.showCustomAlert('Please fill in all required fields');
-                    }
-                });
+    document.getElementById('cancel-btn').addEventListener('click', function() {
+        if (wasPreviousConductProject) {
+            SharedFunctions.showCustomAlert('You cannot skip the audit count when the previous AUX was "Conduct Project"');
+        } else {
+            closePopup();
+        }
+    });
 
+    function closePopup() {
+        const popup = document.getElementById('combined-popup');
+        if (!popup) {
+            console.warn('Popup element not found, skipping close operation.');
+            return;
+        }
 
-                document.getElementById('cancel-btn').addEventListener('click', function() {
-                    if (wasPreviousConductProject) {
-                        SharedFunctions.showCustomAlert('You cannot skip the audit count when the previous AUX was "Conduct Project"');
-                    } else {
-                        closePopup();
-                    }
-                });
+        popup.style.animation = 'popupOut 0.3s forwards';
+        setTimeout(() => {
+            if (popup.parentNode) {
+                popup.remove();
+            }
+        }, 300);
+    }
 
-                function closePopup() {
-                    const popup = document.getElementById('combined-popup');
-                    if (!popup) {
-                        console.warn('Popup element not found, skipping close operation.');
-                        return;
-                    }
-
-                    popup.style.animation = 'popupOut 0.3s forwards';
-                    setTimeout(() => {
-                        if (popup.parentNode) {
-                            popup.remove();
-                        }
-                    }, 300);
-                }
-
-                window.addEventListener('beforeunload', function(e) {
-                    const popup = document.getElementById('combined-popup');
-                    if (popup) {
-                        e.preventDefault();
-                        e.returnValue = '';
-                    }
-                });
+    window.addEventListener('beforeunload', function(e) {
+        const popup = document.getElementById('combined-popup');
+        if (popup) {
+            e.preventDefault();
+            e.returnValue = '';
+        }
+    });
             }
 
             function validateInputs() {
@@ -9710,6 +9710,7 @@ async function handleAuxStateChange(newAuxLabel) {
 </script>
 </body>
 </html>
+
 
 
 
