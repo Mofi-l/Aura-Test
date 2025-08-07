@@ -6642,7 +6642,7 @@ ${update.isPaused ? `Paused Since: ${new Date(update.pauseTime).toLocaleString()
 
                     if (l1Value !== '' && isTabFocused && !isRestoring) {
                         const prevAuxState = JSON.parse(localStorage.getItem('auxState')) || {};
-                        const wasPreviousConductProject = prevAuxState.auxLabel && prevAuxState.auxLabel.toLowerCase().includes('conduct project');
+                        const wasPreviousConductProject = prevAuxState.auxLabel && prevAuxState.auxLabel.toLowerCase().includes(' - conduct project');
                         showCombinedPopup(newAuxLabel, (auditData) => {
                             console.log('Audit data submitted:', auditData);
                         }, wasPreviousConductProject);
@@ -6704,7 +6704,7 @@ ${update.isPaused ? `Paused Since: ${new Date(update.pauseTime).toLocaleString()
                 if (l2Value !== '' && !l3Mapping[l2Value] && !isRestoring) {
                     if (isTabFocused) {
                         const prevAuxState = JSON.parse(localStorage.getItem('auxState')) || {};
-                        const wasPreviousConductProject = prevAuxState.auxLabel && prevAuxState.auxLabel.toLowerCase().includes('conduct project');
+                        const wasPreviousConductProject = prevAuxState.auxLabel && prevAuxState.auxLabel.toLowerCase().includes(' - conduct project');
                         showCombinedPopup(newAuxLabel, (auditData) => {
                             console.log('Audit data submitted:', auditData);
                         }, wasPreviousConductProject);
@@ -6742,7 +6742,7 @@ ${update.isPaused ? `Paused Since: ${new Date(update.pauseTime).toLocaleString()
                     const currentState = JSON.parse(localStorage.getItem('auxState')) || {};
                     if (currentState.auxLabel !== newAuxLabel && !isRestoring && !isInitialLoad) {
                         handleAuxStateChange(newAuxLabel);
-                        const wasPreviousConductProject = currentState.auxLabel && currentState.auxLabel.toLowerCase().includes('conduct project');
+                        const wasPreviousConductProject = currentState.auxLabel && currentState.auxLabel.toLowerCase().includes(' - conduct project');
                         showCombinedPopup(newAuxLabel, (auditData) => {
                             console.log('Audit data submitted:', auditData);
                         }, wasPreviousConductProject);
@@ -6802,12 +6802,17 @@ ${update.isPaused ? `Paused Since: ${new Date(update.pauseTime).toLocaleString()
             }
             ///////////////////////////////////////////////////////////////
             //POP-UP Function//
-            async function showCombinedPopup(auxLabel, callback, wasPreviousConductProject) {
-                if (!isTabFocused) return;
-                console.log('showCombinedPopup function called');
+async function showCombinedPopup(auxLabel, callback, wasPreviousConductProject) {
+    if (!isTabFocused) return;
+    console.log('showCombinedPopup function called');
 
-                const currentLabel = auxLabel.toLowerCase();
-                const enableAuditCount = wasPreviousConductProject && !currentLabel.includes('conduct project');
+    // Modified check for enabling audit count
+    const enableAuditCount = wasPreviousConductProject && 
+        !(auxLabel.toLowerCase().includes(' - conduct project'));
+
+    console.log('Previous AUX was Conduct Project:', wasPreviousConductProject);
+    console.log('Current AUX Label:', auxLabel);
+    console.log('Audit Count Enabled:', enableAuditCount);
 
     const styles = document.createElement('style');
     styles.textContent = `
@@ -7058,24 +7063,24 @@ ${update.isPaused ? `Paused Since: ${new Date(update.pauseTime).toLocaleString()
                     >
                 </div>
 
-            <div class="input-field">
-                <label for="relatedAudits">Audit Counts ${enableAuditCount ? '*' : ''}</label>
-                <input
-                    type="number"
-                    id="relatedAudits"
-                    name="relatedAudits"
-                    placeholder="${enableAuditCount ? 'Enter number of audits' : 'Audit count not required'}"
-                    min="0"
-                    ${enableAuditCount ? 'required' : ''}
-                    ${!enableAuditCount ? 'disabled' : ''}
-                    ${!enableAuditCount ? 'style="background-color: #f5f5f5;"' : ''}
-                    onkeypress="return (event.charCode >= 48 && event.charCode <= 57)"
-                    oninput="this.value = this.value.replace(/[^0-9]/g, '')"
-                >
-                ${!enableAuditCount ?
-                    '<small style="color: #666; display: block; margin-top: 5px;">Audit count is only required after "Conduct Project"</small>'
-                    : ''}
-            </div>
+                <div class="input-field">
+                    <label for="relatedAudits">Audit Counts ${enableAuditCount ? '*' : ''}</label>
+                    <input
+                        type="number"
+                        id="relatedAudits"
+                        name="relatedAudits"
+                        placeholder="${enableAuditCount ? 'Enter number of audits' : 'Audit count not required'}"
+                        min="0"
+                        ${enableAuditCount ? 'required' : ''}
+                        ${!enableAuditCount ? 'disabled' : ''}
+                        ${!enableAuditCount ? 'style="background-color: #f5f5f5;"' : ''}
+                        onkeypress="return (event.charCode >= 48 && event.charCode <= 57)"
+                        oninput="this.value = this.value.replace(/[^0-9]/g, '')"
+                    >
+                    ${!enableAuditCount ?
+                        '<small style="color: #666; display: block; margin-top: 5px;">Audit count is only required after "Conduct Project"</small>'
+                        : ''}
+                </div>
 
             <div class="input-field">
                 <label for="comment-text">Comment</label>
@@ -7212,7 +7217,8 @@ function validateInputs() {
         return false;
     }
 
-    if (!relatedAudits.disabled) {
+    // Modified audit count validation
+    if (!relatedAudits.disabled && !relatedAudits.hasAttribute('disabled')) {
         if (!auditValue) {
             SharedFunctions.showCustomAlert('Please enter the number of audits');
             relatedAudits.focus();
@@ -9699,4 +9705,5 @@ async function handleAuxStateChange(newAuxLabel) {
 </script>
 </body>
 </html>
+
 
