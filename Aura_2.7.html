@@ -289,31 +289,31 @@ body {
 
             .auth-submit-btn,
             .auth-cancel-btn {
-                padding: 12px 28px;
-                border: none;
-                border-radius: 12px;
-                font-size: 15px;
-                font-weight: 600;
-                cursor: pointer;
-                transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+                padding: 12px 28px !important;
+                border: none !important;
+                border-radius: 12px !important;
+                font-size: 15px !important;
+                font-weight: 600 !important;
+                cursor: pointer !important;
+                transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
             }
 
-            .auth-submit-btn {
-                background: linear-gradient(135deg, #5865f2, #818cf8);
-                color: white;
-                box-shadow: 0 6px 18px rgba(88, 101, 242, 0.25);
-            }
+.auth-submit-btn {
+    background: linear-gradient(135deg, #5865f2, #818cf8) !important;
+    color: white !important;
+    box-shadow: 0 6px 18px rgba(88, 101, 242, 0.25) !important;
+}
 
             .auth-submit-btn:hover {
                 transform: translateY(-2px);
                 box-shadow: 0 8px 25px rgba(88, 101, 242, 0.35);
             }
 
-            .auth-cancel-btn {
-                background: rgba(255, 255, 255, 0.08);
-                color: white;
-                backdrop-filter: blur(4px);
-            }
+.auth-cancel-btn {
+    background: rgba(255, 255, 255, 0.08) !important;
+    color: white !important;
+    backdrop-filter: blur(4px) !important;
+}
 
             .auth-cancel-btn:hover {
                 background: rgba(255, 255, 255, 0.12);
@@ -5147,6 +5147,7 @@ body {
                 document.getElementById('flashDataButton').addEventListener('click', flashData);
             });
             ///////////////////////////////////////////////////////////////
+     
             // Dashboard functionality
             // Part 1: Core Dashboard Setup and Initialization
             // Dashboard click handler
@@ -5304,7 +5305,11 @@ body {
                     return 'paused';
                 }
 
-                if (auxLabel && auxLabel.toLowerCase().includes('offline', 'undefined')) {
+                if (auxLabel && auxLabel.toLowerCase().includes('offline')) {
+                    return 'inactive';
+                }
+
+                if (auxLabel && auxLabel.toLowerCase().includes('undefined')) {
                     return 'inactive';
                 }
 
@@ -5313,6 +5318,7 @@ body {
                 }
 
                 return auxLabel ? 'active' : 'inactive';
+
             }
 
             // Helper function to format time display
@@ -5641,8 +5647,9 @@ body {
         <div class="dashboard-header">
             <h2 class="dashboard-title">Real-time AUX Dashboard</h2>
             <div class="dashboard-controls">
-                <button class="dashboard-button refresh-btn" title="Refresh Data">â†»</button>
-                <button class="dashboard-button close-btn">Ã—</button>
+                <button class="dashboard-button refresh-btn" title="Refresh Data">↻</button>
+                <button class="dashboard-button download-btn" title="Download CSV">⬇️</button>
+                <button class="dashboard-button close-btn">×</button>
             </div>
         </div>
         <div class="search-container">
@@ -5690,6 +5697,22 @@ body {
                     }, 1000);
                 };
 
+                const downloadBtn = dashboard.querySelector('.download-btn');
+                downloadBtn.onclick = () => {
+                    const csvContent = generateCSV(lastUpdates);
+                    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                    const link = document.createElement('a');
+                    if (link.download !== undefined) {
+                        const url = URL.createObjectURL(blob);
+                        link.setAttribute('href', url);
+                        link.setAttribute('download', 'aux_dashboard_data.csv');
+                        link.style.visibility = 'hidden';
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                    }
+                };
+
                 closeBtn.onclick = () => {
                     stopDashboardUpdates();
                     dashboard.remove();
@@ -5708,6 +5731,22 @@ body {
                         dashboard.remove();
                     }
                 });
+            }
+
+            function generateCSV(updates) {
+                const headers = ['Date', 'Username', 'Login Time', 'Paused Time', 'Logout Time', 'Total Time'];
+                const rows = updates.map(update => {
+                    const date = new Date(update.loginTime).toLocaleDateString();
+                    const loginTime = new Date(update.loginTime).toLocaleTimeString();
+                    const logoutTime = update.logoutTime ? new Date(update.logoutTime).toLocaleTimeString() : 'Active';
+                    const pausedTime = formatTime(update.totalPauseDuration || 0);
+                    const totalTime = formatTime(
+                        (update.logoutTime ? new Date(update.logoutTime) : new Date()) - new Date(update.loginTime) - (update.totalPauseDuration || 0)
+                    );
+                    return [date, update.username, loginTime, pausedTime, logoutTime, totalTime];
+                });
+
+                return [headers, ...rows].map(row => row.join(',')).join('\n');
             }
 
             // Part 3: Data Fetching and Dashboard Updates
@@ -5763,6 +5802,32 @@ body {
                     });
 
                     const s3 = new AWS.S3();
+                    const today = new Date().toISOString().split('T')[0];
+                    const initialLoginTime = localStorage.getItem('dailyLoginTime');
+                    // Try to get existing data from AWS first
+                    let existingData;
+                    try {
+                        const response = await s3.getObject({
+                            Bucket: 'real-time-databucket',
+                            Key: `aux-realtime/${username}.json`
+            }).promise();
+                        existingData = JSON.parse(response.Body.toString());
+                    } catch (error) {
+                        if (error.code !== 'NoSuchKey') {
+                            throw error;
+                        }
+                        // If the file doesn't exist, we'll create a new one
+                    }
+
+                    // Determine the correct login time
+                    let loginTime;
+                    if (existingData && existingData.date === today) {
+                        loginTime = existingData.loginTime;
+                    } else {
+                        // Use setInitialLoginTime to ensure consistency
+                        setInitialLoginTime();
+                        loginTime = localStorage.getItem('dailyLoginTime');
+                    }
 
                     // Prepare the data object with explicit pause state information
                     const data = {
@@ -5773,32 +5838,17 @@ body {
                         isPaused: currentState.isPaused || false,
                         pauseTime: currentState.pauseTime || null,
                         totalPauseDuration: currentState.totalPauseDuration || 0,
-                        // Modify login time handling
-                        loginTime: localStorage.getItem('firstAuxUpdateTime') || (() => {
-                            const time = new Date().toISOString();
-                            localStorage.setItem('firstAuxUpdateTime', time);
-                            return time;
-                        })(),
-                        // Modify logout time handling
+                        loginTime: initialLoginTime,
                         logoutTime: currentState.auxLabel.toLowerCase().includes('offline') ?
-                        localStorage.getItem('offlineTime') || (() => {
-                            const time = new Date().toISOString();
-                            localStorage.setItem('offlineTime', time);
-                            return time;
-                        })() : null,
+                        localStorage.getItem('dailyLogoutTime') || new Date().toISOString() : null,
                         lastAuxUpdate: new Date().toISOString(),
+                        date: today,
                         status: calculateUserStatus(
                             new Date().getTime(),
                             currentState.auxLabel,
                             currentState.isPaused
                         )
                     };
-
-                    // Set logoutTime if user is going offline
-                    if (currentState.auxLabel.toLowerCase().includes('offline') ||
-                        currentState.auxLabel.toLowerCase().includes('undefined')) {
-                        data.logoutTime = new Date().toISOString();
-                    }
 
                     console.log('Sending data to S3:', data);
 
@@ -5833,7 +5883,7 @@ body {
                         await updateDashboardData(true);
                     }
 
-                    return data; // Return the data for any subsequent operations
+                    return true; // Return success
 
                 } catch (error) {
                     console.error('Error sending AUX update:', error);
@@ -5878,52 +5928,9 @@ body {
             });
 
             // Helper function to calculate pause duration
-            function calculatePauseDuration(auxState) {
-                // Improved pause duration calculation with validation and error handling
-                try {
-                    const currentTime = Date.now();
-
-                    if (!auxState || !auxState.startTime) {
-                        return 0;
-                    }
-
-                    // If paused, calculate from pause time
-                    if (auxState.isPaused && auxState.pauseTime) {
-                        const pauseDuration = Math.max(0, currentTime - auxState.pauseTime);
-                        const totalPause = (auxState.totalPauseDuration || 0) + pauseDuration;
-                        return {
-                            current: pauseDuration,
-                            total: totalPause
-                        };
-                    }
-
-                    // If not paused, return only total accumulated pause time
-                    return {
-                        current: 0,
-                        total: auxState.totalPauseDuration || 0
-                    };
-                } catch (error) {
-                    console.error('Error calculating pause duration:', error);
-                    return {
-                        current: 0,
-                        total: 0
-                    };
-                }
-            }
-
-            // Implementation in timer update
-            function updateTimerWithPause(startTime, auxLabel) {
-                const auxState = JSON.parse(localStorage.getItem('auxState')) || {};
-                const currentTime = Date.now();
-                const pauseInfo = calculatePauseDuration(auxState);
-
-                const elapsedTime = currentTime - startTime - pauseInfo.total;
-
-                return {
-                    elapsedTime: Math.max(0, elapsedTime),
-                    pauseTime: pauseInfo.current,
-                    totalPauseTime: pauseInfo.total
-                };
+            function calculatePauseDuration(state) {
+                if (!state.pauseTime) return 0;
+                return new Date().getTime() - new Date(state.pauseTime).getTime();
             }
 
             // Helper function to broadcast state changes
@@ -5960,6 +5967,8 @@ body {
                     updateDashboardData(true);
                 }
             });
+
+            let lastUpdates = [];
 
             async function updateDashboardData(isImmediateUpdate = false) {
                 try {
@@ -6027,20 +6036,29 @@ body {
                             const updateDate = new Date(lastUpdateTime).setHours(0, 0, 0, 0);
                             const timeSinceUpdate = currentTime - lastUpdateTime;
 
-                            if (updateDate === today) {
-                                return {
-                                    ...userState,
-                                    fileKey: item.Key,
-                                    lastModified: item.LastModified,
-                                    timeSinceUpdate,
-                                    isPaused: userState.isPaused || false,
-                                    status: calculateUserStatus(
-                                        lastUpdateTime,
-                                        userState.auxLabel,
-                                        userState.isPaused
-                                    )
-                                };
-                            }
+                            // Ensure we're using the stored login time
+                            const storedLoginTime = userState.loginTime;
+                            const today = new Date().toISOString().split('T')[0];
+
+                            // Only use stored login time if it's from today
+                            const loginTime = userState.date === today ?
+                                  storedLoginTime :
+                            new Date().toISOString();
+
+                            //if (updateDate === today) {
+                            return {
+                                ...userState,
+                                fileKey: item.Key,
+                                lastModified: item.LastModified,
+                                timeSinceUpdate,
+                                isPaused: userState.isPaused || false,
+                                status: calculateUserStatus(
+                                    lastUpdateTime,
+                                    userState.auxLabel,
+                                    userState.isPaused
+                                )
+                            };
+                            //}
                             return null;
                         } catch (error) {
                             console.error(`Error processing file ${item.Key}:`, error);
@@ -6070,6 +6088,9 @@ body {
                     });
 
                     console.log('Processed updates:', validUpdates.length);
+
+                    // Store the latest updates for CSV download
+                    lastUpdates = validUpdates;
 
                     // Update UI with the processed data
                     updateDashboardUI(validUpdates);
@@ -6109,7 +6130,6 @@ body {
                     handleUpdateError(error);
                 }
             }
-
 
             // Error handling function
             function handleUpdateError(error) {
@@ -6194,6 +6214,7 @@ body {
             let currentSearchTerm = '';
 
             function updateDashboardUI(updates) {
+                const currentUsername = localStorage.getItem("currentUsername");
                 const tbody = document.getElementById('dashboard-data');
                 if (!tbody) {
                     console.error('Dashboard table body not found');
@@ -6220,16 +6241,19 @@ body {
     `;
                 document.head.appendChild(style);
 
-                const currentUsername = localStorage.getItem("currentUsername");
-
                 updates.forEach((update, index) => {
                     const row = tbody.insertRow();
                     const isCurrentUser = update.username === currentUsername;
+                    const today = new Date().toISOString().split('T')[0];
 
                     // Add highlighting for current user
                     if (isCurrentUser) {
                         row.style.backgroundColor = 'rgba(108, 92, 231, 0.1)';
                         row.style.borderLeft = '3px solid #6c5ce7';
+                        update = {
+                            ...update,
+                            loginTime: update.loginTime // Preserve the AWS login time
+                        };
                     }
 
                     // Determine status based on updated conditions
@@ -6266,7 +6290,7 @@ body {
                     auxCell.textContent = auxLabel;
                     if (update.isPaused) {
                         const pauseIndicator = document.createElement('span');
-                        pauseIndicator.innerHTML = 'â¸ï¸';
+                        pauseIndicator.innerHTML = '⏸️';
                         pauseIndicator.title = 'AUX Paused';
                         pauseIndicator.style.opacity = '0.7';
                         auxCell.appendChild(pauseIndicator);
@@ -6296,12 +6320,19 @@ body {
                     pauseTimeCell.textContent = formatTime(totalPause);
 
                     // Add cells for login time
-                    const loginTimeCell = row.insertCell();
-                    const storedLoginTime = localStorage.getItem('dailyLoginTime');
-                    loginTimeCell.textContent = storedLoginTime ?
-                        new Date(storedLoginTime).toLocaleTimeString() :
-                    new Date(update.loginTime).toLocaleTimeString();
-
+                    const loginTimeCell = row.insertCell();        
+                    if (update.username === currentUsername) {
+                        // For current user, use the stored initial login time
+                        const initialLoginTime = localStorage.getItem('dailyLoginTime');
+                        loginTimeCell.textContent = initialLoginTime ? 
+                            new Date(initialLoginTime).toLocaleTimeString() : 
+                        'No login time';
+                    } else {
+                        // For other users, use their login time from the update
+                        loginTimeCell.textContent = update.loginTime ? 
+                            new Date(update.loginTime).toLocaleTimeString() : 
+                        'No login time';
+                    }
                     // Add logout time if exists
                     const logoutTimeCell = row.insertCell();
                     const storedLogoutTime = localStorage.getItem('dailyLogoutTime');
@@ -6397,10 +6428,10 @@ ${update.isPaused ? `Paused Since: ${new Date(update.pauseTime).toLocaleString()
                 };
 
                 const statusIcon = {
-                    'active': 'ðŸŸ¢',
-                    'away': 'ðŸŸ¡',
-                    'paused': 'â¸ï¸',
-                    'inactive': 'ðŸ”´'
+                    'active': '🟢',
+                    'away': '🟡',
+                    'paused': '⏸️',
+                    'inactive': '🔴'
                 };
 
                 cell.innerHTML = `
@@ -6454,7 +6485,6 @@ ${update.isPaused ? `Paused Since: ${new Date(update.pauseTime).toLocaleString()
                     }
                 }
             }
-
             ///////////////////////////////////////////////////////////////
             //Update Selections Body//
 
@@ -9653,6 +9683,7 @@ ${auxState.startTime ? `Started: ${new Date(auxState.startTime).toLocaleTimeStri
 </script>
 </body>
 </html>
+
 
 
 
