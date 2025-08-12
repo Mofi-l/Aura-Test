@@ -7497,9 +7497,7 @@ ${update.isPaused ? `Paused Since: ${new Date(update.pauseTime).toLocaleString()
             document.head.appendChild(document.createElement('style')).textContent = projectDetailsStyles;
 
             //Project details Dashboard
-            document.getElementById('projectDetailsButton').addEventListener('click', function() {
-                SharedFunctions.showCustomAlert('This option is not available for your site')
-            });
+            document.getElementById('projectDetailsButton').addEventListener('click', showProjectDetailsForm);
 
             //Get project details
             async function showProjectDashboard() {
@@ -8801,9 +8799,7 @@ ${update.isPaused ? `Paused Since: ${new Date(update.pauseTime).toLocaleString()
                 window.URL.revokeObjectURL(url);
             }
 
-            document.getElementById('getProjectDetailsButton').addEventListener('click', function() {
-                SharedFunctions.showCustomAlert('This option is not available for your site')
-            });
+            document.getElementById('getProjectDetailsButton').addEventListener('click', showProjectDashboard);
             ///////////////////////////////////////////////////////////////
             //Timer Functions//
             let isPaused = false;
@@ -9657,5 +9653,6 @@ ${auxState.startTime ? `Started: ${new Date(auxState.startTime).toLocaleTimeStri
 </script>
 </body>
 </html>
+
 
 
