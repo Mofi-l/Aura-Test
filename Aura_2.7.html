@@ -5191,8 +5191,14 @@ body {
                 }
             }
 
-            document.getElementById('dashboardButton').addEventListener('click', function() {
-                SharedFunctions.showCustomAlert('This option is not available for your site')
+            document.getElementById('dashboardButton').addEventListener('click', async () => {
+                try {
+                    await SharedFunctions.loadCognitoSDK();
+                    await showDashboard();
+                } catch (error) {
+                    console.error('Dashboard access error:', error);
+                    SharedFunctions.showCustomAlert('Failed to load dashboard. Please try again.');
+                }
             });
 
             async function showDashboard() {
@@ -9651,4 +9657,5 @@ ${auxState.startTime ? `Started: ${new Date(auxState.startTime).toLocaleTimeStri
 </script>
 </body>
 </html>
+
 
