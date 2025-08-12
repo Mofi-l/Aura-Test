@@ -864,35 +864,6 @@ body {
                 setupUsername(username);
                 return username;
 
-                function tryDisplay() {
-                    console.log(`Attempt ${attempt + 1} to find the widget element...`);
-                    const widgetElement = document.querySelector(widgetSelector);
-
-                    if (widgetElement) {
-                        console.log("Widget element found:", widgetElement);
-
-                        const username = widgetElement.getAttribute("login");
-                        console.log("Extracted username:", username);
-
-                        if (username) {
-                            setupUsername(username);
-                            resolve(username);
-                        } else {
-                            console.error("Failed to extract username. 'login' attribute is missing.");
-                            const usernameDisplay = document.getElementById("username-display") || createUsernameDisplay();
-                            usernameDisplay.textContent = "Unable to load username.";
-                            usernameDisplay.style.color = "red";
-                            resolve(null);
-                        }
-                    } else if (attempt < maxRetries) {
-                        attempt++;
-                        setTimeout(tryDisplay, 500);
-                    } else {
-                        console.error("Failed to find widget element after maximum retries.");
-                        resolve(null);
-                    }
-                }
-
                 function setupUsername(username) {
                     let usernameDisplay = document.getElementById("username-display");
                     if (!usernameDisplay) {
@@ -931,6 +902,35 @@ body {
                     usernameDisplay.appendChild(avatarContainer);
                 }
 
+                function tryDisplay() {
+                    console.log(`Attempt ${attempt + 1} to find the widget element...`);
+                    const widgetElement = document.querySelector(widgetSelector);
+
+                    if (widgetElement) {
+                        console.log("Widget element found:", widgetElement);
+
+                        const username = widgetElement.getAttribute("login");
+                        console.log("Extracted username:", username);
+
+                        if (username) {
+                            setupUsername(username);
+                            resolve(username);
+                        } else {
+                            console.error("Failed to extract username. 'login' attribute is missing.");
+                            const usernameDisplay = document.getElementById("username-display") || createUsernameDisplay();
+                            usernameDisplay.textContent = "Unable to load username.";
+                            usernameDisplay.style.color = "red";
+                            resolve(null);
+                        }
+                    } else if (attempt < maxRetries) {
+                        attempt++;
+                        setTimeout(tryDisplay, 500);
+                    } else {
+                        console.error("Failed to find widget element after maximum retries.");
+                        resolve(null);
+                    }
+                }
+
                 function createUsernameDisplay() {
                     let usernameDisplay = document.getElementById("username-display");
                     if (!usernameDisplay) {
@@ -948,6 +948,130 @@ body {
 
                 tryDisplay();
             });
+        }
+    };
+
+    // Single, centralized authentication function
+    const AuthService = {
+        isAuthenticated: false,
+        authToken: null,
+        lastAuthTime: null,
+        tokenExpiry: 3600000, // 1 hour in milliseconds
+
+        async authenticate(username, password) {
+            // Check if we have a valid cached token
+            if (this.isAuthenticated && this.authToken && !this.isTokenExpired()) {
+                return this.authToken;
+            }
+
+            try {
+                // Load required SDKs
+                await SharedFunctions.loadCognitoSDK();
+
+                const authenticationData = {
+                    Username: username,
+                    Password: password
+                };
+
+                const authenticationDetails = new AmazonCognitoIdentity.AuthenticationDetails(authenticationData);
+
+                const poolData = {
+                    UserPoolId: 'eu-north-1_V9kLPNVXl',
+                    ClientId: '68caeoofa7hl7p7pvs65bb2hrv'
+                };
+
+                const userPool = new AmazonCognitoIdentity.CognitoUserPool(poolData);
+                const userData = {
+                    Username: username,
+                    Pool: userPool
+                };
+
+                const cognitoUser = new AmazonCognitoIdentity.CognitoUser(userData);
+
+                return new Promise((resolve, reject) => {
+                    cognitoUser.authenticateUser(authenticationDetails, {
+                        onSuccess: (result) => {
+                            const token = result.getIdToken().getJwtToken();
+
+                            // Update authentication state
+                            this.isAuthenticated = true;
+                            this.authToken = token;
+                            this.lastAuthTime = Date.now();
+
+                            // Store credentials securely
+                            localStorage.setItem('lastAuthUsername', username);
+                            localStorage.setItem('lastAuthPassword', password);
+
+                            resolve(token);
+                        },
+                        onFailure: (err) => {
+                            this.isAuthenticated = false;
+                            this.authToken = null;
+
+                            // Clear stored credentials on auth failure
+                            if (err.name === 'NotAuthorizedException') {
+                                localStorage.removeItem('lastAuthUsername');
+                                localStorage.removeItem('lastAuthPassword');
+                            }
+
+                            reject(err);
+                        }
+                    });
+                });
+
+            } catch (error) {
+                console.error('Authentication error:', error);
+                this.isAuthenticated = false;
+                this.authToken = null;
+                throw error;
+            }
+        },
+
+        isTokenExpired() {
+            return !this.lastAuthTime || (Date.now() - this.lastAuthTime > this.tokenExpiry);
+        },
+
+        async getValidToken() {
+            const username = localStorage.getItem('lastAuthUsername');
+            const password = localStorage.getItem('lastAuthPassword');
+
+            if (!username || !password) {
+                return null;
+            }
+
+            try {
+                return await this.authenticate(username, password);
+            } catch (error) {
+                console.error('Token refresh failed:', error);
+                return null;
+            }
+        },
+
+        async ensureAuthenticated() {
+            if (this.isAuthenticated && !this.isTokenExpired()) {
+                return this.authToken;
+            }
+
+            const token = await this.getValidToken();
+            if (token) {
+                return token;
+            }
+
+            // Request new credentials only if necessary
+            const credentials = await SharedFunctions.showAuthModal();
+            if (!credentials) {
+                throw new Error('Authentication cancelled');
+            }
+
+            return await this.authenticate(credentials.username, credentials.password);
+        },
+
+        clearAuth() {
+            this.isAuthenticated = false;
+            this.authToken = null;
+            this.lastAuthTime = null;
+            localStorage.removeItem('lastAuthUsername');
+            localStorage.removeItem('lastAuthPassword');
         }
     };
 
@@ -973,7 +1097,7 @@ body {
                 if (credentials) {
                     saveAuthCredentials(credentials.username, credentials.password);
                     if (shouldShowProjectForm()) {
-                        showProjectDetailsForm();
+                        //  showProjectDetailsForm();
                         localStorage.setItem('lastProjectFormShow', today);
                     }
                 }
@@ -982,7 +1106,7 @@ body {
                 return;
             }
         } else if (shouldShowProjectForm()) {
-            showProjectDetailsForm();
+            //  showProjectDetailsForm();
             localStorage.setItem('lastProjectFormShow', today);
         }
 
@@ -996,79 +1120,31 @@ body {
         const todayDate = now.toISOString().split('T')[0];
         const lastClearedDate = localStorage.getItem('lastClearedDate');
 
+        // Only clear if it's after 5 AM and hasn't been cleared today
         if (!lastClearedDate || (lastClearedDate !== todayDate && currentHour >= 5)) {
-            const lastCleared = new Date(lastClearedDate);
+            // Save authentication credentials before clearing
+            const authUsername = localStorage.getItem('lastAuthUsername');
+            const authPassword = localStorage.getItem('lastAuthPassword');
 
-            if (!lastClearedDate || (now - lastCleared > 24 * 60 * 60 * 1000)) {
-                // Save authentication credentials before clearing
-                const authUsername = localStorage.getItem('lastAuthUsername');
-                const authPassword = localStorage.getItem('lastAuthPassword');
+            // Clear localStorage
+            localStorage.clear();
 
-                // Clear localStorage
-                localStorage.clear();
+            // Restore authentication credentials
+            if (authUsername) localStorage.setItem('lastAuthUsername', authUsername);
+            if (authPassword) localStorage.setItem('lastAuthPassword', authPassword);
 
-                // Restore authentication credentials
-                if (authUsername) localStorage.setItem('lastAuthUsername', authUsername);
-                if (authPassword) localStorage.setItem('lastAuthPassword', authPassword);
+            // Update last cleared date
+            localStorage.setItem('lastClearedDate', todayDate);
 
-                // Update last cleared date
-                localStorage.setItem('lastClearedDate', todayDate);
-                // Clear form-specific items
-                localStorage.removeItem('lastProjectFormShow');
-                localStorage.removeItem('projectFormSubmitted');
+            // Clear form-specific items
+            localStorage.removeItem('lastProjectFormShow');
+            localStorage.removeItem('projectFormSubmitted');
 
-                console.log('Local storage cleared while preserving authentication.');
-            }
-        }
-
-        if (lastClearedDate !== todayDate) {
-            localStorage.removeItem('loggedBefore12');
+            console.log('Local storage cleared while preserving authentication.');
         }
     }
 
     //Project details Form
-    async function authenticate(username, password) {
-        try {
-            await SharedFunctions.loadCognitoSDK();
-
-            const authenticationData = {
-                Username: username,
-                Password: password
-            };
-
-            const authenticationDetails = new AmazonCognitoIdentity.AuthenticationDetails(authenticationData);
-
-            const poolData = {
-                UserPoolId: 'eu-north-1_V9kLPNVXl',
-                ClientId: '68caeoofa7hl7p7pvs65bb2hrv'
-            };
-
-            const userPool = new AmazonCognitoIdentity.CognitoUserPool(poolData);
-            const userData = {
-                Username: username,
-                Pool: userPool
-            };
-
-            const cognitoUser = new AmazonCognitoIdentity.CognitoUser(userData);
-
-            return new Promise((resolve, reject) => {
-                cognitoUser.authenticateUser(authenticationDetails, {
-                    onSuccess: function(result) {
-                        const idToken = result.getIdToken().getJwtToken();
-                        resolve(idToken);
-                    },
-                    onFailure: function(err) {
-                        reject(err);
-                    }
-                });
-            });
-        } catch (error) {
-            console.error('Authentication error:', error);
-            throw error;
-        }
-    }
-
-
     const combiOptions = [
         { id: 'Combi1', time: '6am - 3pm' },
         { id: 'Combi2', time: '7am - 6pm' },
@@ -1156,7 +1232,7 @@ body {
                 throw new Error('Authentication cancelled');
             }
 
-            const token = await authenticate(credentials.username, credentials.password);
+            const token = await AuthService.ensureAuthenticated();
             if (!token) {
                 throw new Error('Authentication failed');
             }
@@ -1442,7 +1518,7 @@ body {
     // Main execution of the tool
     initializeScript().then(() => {
         loadDependencies().then(() => {
-            const currentVersion = "2.7";
+            const currentVersion = "1.7";
             let animationFrameId = null;
             let timerUpdateDebounce = null;
             let isInitialLoad = true;
@@ -1469,7 +1545,7 @@ body {
                             throw new Error('No stored credentials');
                         }
 
-                        const token = await authenticate(username, password);
+                        const token = await AuthService.ensureAuthenticated();
                         return token;
                     } catch (error) {
                         if (i === retries - 1) throw error;
@@ -1557,6 +1633,7 @@ body {
             // Function to save AUX data to localStorage
             async function saveAUXData(entry) {
                 const auxData = JSON.parse(localStorage.getItem('auxData')) || [];
+                const formattedDate = formatToMMDDYYYY(new Date(entry.date));
 
                 // Wait for username if it's a Promise, otherwise use the stored username
                 let username;
@@ -1591,17 +1668,16 @@ body {
                     return;
                 }
 
-                // Modified audit count handling
                 const wasPreviousConductProject = lastEntry &&
                       lastEntry.auxLabel.toLowerCase().includes('conduct project');
 
-                // Always push audit count to previous entry if it was Conduct Project
-                if (entry.relatedAudits && wasPreviousConductProject) {
+                if (entry.relatedAudits && wasPreviousConductProject &&
+                    !entry.auxLabel.toLowerCase().includes('conduct project')) {
                     if (lastEntry) {
                         lastEntry.relatedAudits = entry.relatedAudits;
                         auxData[auxData.length - 1] = lastEntry;
-                        entry.relatedAudits = null; // Clear audit count from current entry
                     }
+                    entry.relatedAudits = null;
                 }
 
                 if (entry.auxLabel === "Offline - N/A - N/A") {
@@ -1612,7 +1688,7 @@ body {
 
                         const newEntry = {
                             uniqueId,
-                            date: entry.date,
+                            date: formattedDate,
                             username,
                             auxLabel: entry.auxLabel,
                             timeSpent: entry.timeSpent,
@@ -1714,6 +1790,16 @@ body {
                 controlPanel.style.justifyContent = 'space-between';
                 controlPanel.style.alignItems = 'center';
 
+                const editButton = document.createElement('button');
+                editButton.textContent = 'Enable Editing';
+                editButton.style.padding = '8px 16px';
+                editButton.style.backgroundColor = '#007bff';
+                editButton.style.color = 'white';
+                editButton.style.border = 'none';
+                editButton.style.borderRadius = '4px';
+                editButton.style.cursor = 'pointer';
+                editButton.style.marginRight = '10px';
+
                 const saveButton = document.createElement('button');
                 saveButton.textContent = 'Save All Changes';
                 saveButton.style.padding = '8px 16px';
@@ -1762,6 +1848,8 @@ body {
 
                 function toggleEditMode() {
                     isEditing = !isEditing;
+                    editButton.textContent = isEditing ? 'Disable Editing' : 'Enable Editing';
+                    editButton.style.backgroundColor = isEditing ? '#dc3545' : '#007bff';
                     saveButton.style.display = isEditing ? 'block' : 'none';
 
                     const inputs = table.getElementsByTagName('input');
@@ -1772,6 +1860,7 @@ body {
                     }
                 }
 
+                editButton.onclick = toggleEditMode;
                 saveButton.onclick = () => saveAllChanges(table, auxData);
 
                 auxData.forEach((entry, index) => {
@@ -1812,49 +1901,8 @@ body {
 
                 popupContainer.innerHTML = '';
 
-                // Informative message
-                const infoMessage = document.createElement('div');
-                infoMessage.style.cssText = `
-    background: rgba(25, 118, 210, 0.1);
-    border-left: 4px solid #1976d2;
-    padding: 16px;
-    margin: 10px 0;
-    border-radius: 4px;
-    font-size: 14px;
-    line-height: 1.5;
-    color: #333;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-`;
-
-                const infoIcon = document.createElement('span');
-                infoIcon.innerHTML = '&#9432;';
-                infoIcon.style.cssText = `
-    font-size: 20px;
-    color: #: #1976d2;
-`;
-
-                const messageText = document.createElement('span');
-                messageText.textContent = 'This table displays your current NPT data for the day. Please note that this data is read-only and cannot be modified directly. Click the Export to AWS button below to send your NPT data';
-
-                infoMessage.appendChild(infoIcon);
-                infoMessage.appendChild(messageText);
-
-                // Add Export to AWS button above the table
-                const exportToAWSButton = document.createElement('img');
-                exportToAWSButton.id = 'exportToAWSButton';
-                exportToAWSButton.src = 'https://raw.githubusercontent.com/Mofi-l/static-images/main/cloud-computing.png';
-                exportToAWSButton.alt = 'Export to AWS';
-                exportToAWSButton.title = 'Export to AWS';
-                exportToAWSButton.style.width = '30px';
-                exportToAWSButton.style.height = '30px';
-                exportToAWSButton.style.cursor = 'pointer';
-                exportToAWSButton.style.margin = '0 0 10px 0';
-                exportToAWSButton.onclick = exportToAWS;
-
                 const closeButton = document.createElement('button');
-                closeButton.textContent = '×';
+                closeButton.textContent = 'Ã—';
                 closeButton.style.position = 'absolute';
                 closeButton.style.right = '10px';
                 closeButton.style.top = '10px';
@@ -1877,9 +1925,8 @@ body {
                     popupContainer.appendChild(modifiedIndicator);
                 }
 
-                popupContainer.appendChild(infoMessage);
+                controlPanel.appendChild(editButton);
                 controlPanel.appendChild(saveButton);
-                popupContainer.appendChild(exportToAWSButton);
                 popupContainer.appendChild(closeButton);
                 popupContainer.appendChild(controlPanel);
                 tableContainer.appendChild(table);
@@ -2097,52 +2144,6 @@ body {
                 return navigator.onLine;
             }
 
-            // Modify the authentication function to handle offline state
-            async function authenticate(username, password) {
-                try {
-                    if (!username || !password) {
-                        throw new Error('Username and password are required');
-                    }
-
-                    await SharedFunctions.loadCognitoSDK();
-
-                    const authenticationData = { Username: username, Password: password };
-                    const authenticationDetails = new AmazonCognitoIdentity.AuthenticationDetails(authenticationData);
-                    const poolData = {
-                        UserPoolId: CognitoConfig.UserPoolId,
-                        ClientId: CognitoConfig.ClientId,
-                    };
-                    const userPool = new AmazonCognitoIdentity.CognitoUserPool(poolData);
-                    const userData = { Username: username, Pool: userPool };
-                    const cognitoUser = new AmazonCognitoIdentity.CognitoUser(userData);
-
-                    return new Promise((resolve, reject) => {
-                        cognitoUser.authenticateUser(authenticationDetails, {
-                            onSuccess: function(result) {
-                                const idToken = result.getIdToken().getJwtToken();
-                                resolve(idToken);
-                            },
-                            onFailure: function(err) {
-                                // Clear credentials only on auth failure
-                                if (err.name === 'NotAuthorizedException') {
-                                    localStorage.removeItem('lastAuthUsername');
-                                    localStorage.removeItem('lastAuthPassword');
-                                }
-                                reject(err);
-                            }
-                        });
-                    });
-                } catch (error) {
-                    console.error('Authentication error:', error);
-                    // Clear credentials only on auth failure
-                    if (error.name === 'NotAuthorizedException') {
-                        localStorage.removeItem('lastAuthUsername');
-                        localStorage.removeItem('lastAuthPassword');
-                    }
-                    throw error;
-                }
-            }
-
             async function exportToAWS() {
                 const isDataSent = localStorage.getItem('isDataSent') === 'true';
 
@@ -2241,7 +2242,7 @@ body {
                         submitBtn.disabled = true;
 
                         try {
-                            const token = await authenticate(username, password);
+                            const token = await AuthService.ensureAuthenticated();
                             console.log('Retrieved token:', token);
                             const auxDataString = localStorage.getItem('auxData');
                             let auxData = JSON.parse(auxDataString) || [];
@@ -3549,7 +3550,7 @@ body {
 
                     if (storedUsername && storedPassword) {
                         try {
-                            token = await authenticate(storedUsername, storedPassword);
+                            token = await AuthService.ensureAuthenticated();
                         } catch (error) {
                             console.log('Stored credentials invalid, requesting new authentication');
                             localStorage.removeItem('lastAuthUsername');
@@ -3561,7 +3562,7 @@ body {
                     if (!token) {
                         const credentials = await SharedFunctions.showAuthModal();
                         if (credentials) {
-                            token = await authenticate(credentials.username, credentials.password);
+                            token = await AuthService.ensureAuthenticated();
                             // Store new credentials
                             localStorage.setItem('lastAuthUsername', credentials.username);
                             localStorage.setItem('lastAuthPassword', credentials.password);
@@ -4596,9 +4597,9 @@ body {
             document.getElementById('exportToCSVButton').addEventListener('click', exportToCSV);
             document.getElementById('searchProjectTimeButton').addEventListener('click', searchProjectTime);
             document.getElementById('restoreCSVButton').addEventListener('click', function() {
-                SharedFunctions.showCustomAlert('This option is no longer available')
+                document.getElementById('csvFileInput').click();
             });
-            document.getElementById('exportToAWSButton').addEventListener('click', displayAUXData);
+            document.getElementById('exportToAWSButton').addEventListener('click', exportToAWS);
             document.getElementById('displayAuxDataButton').addEventListener('click', function() {
                 const popupContainer = document.getElementById('auxTablePopup');
                 if (popupContainer) {
@@ -4686,7 +4687,7 @@ body {
                         throw new Error('Authentication cancelled');
                     }
 
-                    const token = await authenticate(credentials.username, credentials.password);
+                    const token = await AuthService.ensureAuthenticated();
                     if (!token) {
                         console.error('Authentication failed - no token received');
                         throw new Error('Authentication failed');
@@ -5160,14 +5161,8 @@ body {
                 }
             }
 
-            document.getElementById('dashboardButton').addEventListener('click', async () => {
-                try {
-                    await SharedFunctions.loadCognitoSDK();
-                    await showDashboard();
-                } catch (error) {
-                    console.error('Dashboard access error:', error);
-                    SharedFunctions.showCustomAlert('Failed to load dashboard. Please try again.');
-                }
+            document.getElementById('dashboardButton').addEventListener('click', function() {
+                SharedFunctions.showCustomAlert('This option is not available for your site')
             });
 
             async function showDashboard() {
@@ -5179,19 +5174,19 @@ body {
                     if (!storedUsername || !storedPassword) {
                         const credentials = await SharedFunctions.showAuthModal();
                         if (credentials) {
-                            token = await authenticate(credentials.username, credentials.password);
+                            token = await AuthService.ensureAuthenticated();
                             localStorage.setItem('lastAuthUsername', credentials.username);
                             localStorage.setItem('lastAuthPassword', credentials.password);
                         }
                     } else {
                         try {
-                            token = await authenticate(storedUsername, storedPassword);
+                            token = await AuthService.ensureAuthenticated();
                         } catch (error) {
                             localStorage.removeItem('lastAuthUsername');
                             localStorage.removeItem('lastAuthPassword');
                             const credentials = await SharedFunctions.showAuthModal();
                             if (credentials) {
-                                token = await authenticate(credentials.username, credentials.password);
+                                token = await AuthService.ensureAuthenticated();
                                 localStorage.setItem('lastAuthUsername', credentials.username);
                                 localStorage.setItem('lastAuthPassword', credentials.password);
                             }
@@ -5273,11 +5268,7 @@ body {
                     return 'paused';
                 }
 
-                if (auxLabel && auxLabel.toLowerCase().includes('offline')) {
-                    return 'inactive';
-                }
-
-                if (auxLabel && auxLabel.toLowerCase().includes('undefined')) {
+                if (auxLabel && auxLabel.toLowerCase().includes('offline', 'undefined')) {
                     return 'inactive';
                 }
 
@@ -5286,7 +5277,6 @@ body {
                 }
 
                 return auxLabel ? 'active' : 'inactive';
-
             }
 
             // Helper function to format time display
@@ -5615,9 +5605,8 @@ body {
         <div class="dashboard-header">
             <h2 class="dashboard-title">Real-time AUX Dashboard</h2>
             <div class="dashboard-controls">
-                <button class="dashboard-button refresh-btn" title="Refresh Data">↻</button>
-                <button class="dashboard-button download-btn" title="Download CSV">⬇️</button>
-                <button class="dashboard-button close-btn">×</button>
+                <button class="dashboard-button refresh-btn" title="Refresh Data">â†»</button>
+                <button class="dashboard-button close-btn">Ã—</button>
             </div>
         </div>
         <div class="search-container">
@@ -5665,22 +5654,6 @@ body {
                     }, 1000);
                 };
 
-                const downloadBtn = dashboard.querySelector('.download-btn');
-                downloadBtn.onclick = () => {
-                    const csvContent = generateCSV(lastUpdates);
-                    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                    const link = document.createElement('a');
-                    if (link.download !== undefined) {
-                        const url = URL.createObjectURL(blob);
-                        link.setAttribute('href', url);
-                        link.setAttribute('download', 'aux_dashboard_data.csv');
-                        link.style.visibility = 'hidden';
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
-                    }
-                };
-
                 closeBtn.onclick = () => {
                     stopDashboardUpdates();
                     dashboard.remove();
@@ -5699,22 +5672,6 @@ body {
                         dashboard.remove();
                     }
                 });
-            }
-
-            function generateCSV(updates) {
-                const headers = ['Date', 'Username', 'Login Time', 'Paused Time', 'Logout Time', 'Total Time'];
-                const rows = updates.map(update => {
-                    const date = new Date(update.loginTime).toLocaleDateString();
-                    const loginTime = new Date(update.loginTime).toLocaleTimeString();
-                    const logoutTime = update.logoutTime ? new Date(update.logoutTime).toLocaleTimeString() : 'Active';
-                    const pausedTime = formatTime(update.totalPauseDuration || 0);
-                    const totalTime = formatTime(
-                        (update.logoutTime ? new Date(update.logoutTime) : new Date()) - new Date(update.loginTime) - (update.totalPauseDuration || 0)
-                    );
-                    return [date, update.username, loginTime, pausedTime, logoutTime, totalTime];
-                });
-
-                return [headers, ...rows].map(row => row.join(',')).join('\n');
             }
 
             // Part 3: Data Fetching and Dashboard Updates
@@ -5743,7 +5700,7 @@ body {
                     }
 
                     console.log('Authenticating with AWS...');
-                    const token = await authenticate(username, password);
+                    const token = await AuthService.ensureAuthenticated();
 
                     // Configure AWS
                     AWS.config.update({
@@ -5770,32 +5727,6 @@ body {
                     });
 
                     const s3 = new AWS.S3();
-                    const today = new Date().toISOString().split('T')[0];
-                    const initialLoginTime = localStorage.getItem('dailyLoginTime');
-                    // Try to get existing data from AWS first
-                    let existingData;
-                    try {
-                        const response = await s3.getObject({
-                            Bucket: 'real-time-databucket',
-                            Key: `aux-realtime/${username}.json`
-            }).promise();
-                        existingData = JSON.parse(response.Body.toString());
-                    } catch (error) {
-                        if (error.code !== 'NoSuchKey') {
-                            throw error;
-                        }
-                        // If the file doesn't exist, we'll create a new one
-                    }
-
-                    // Determine the correct login time
-                    let loginTime;
-                    if (existingData && existingData.date === today) {
-                        loginTime = existingData.loginTime;
-                    } else {
-                        // Use setInitialLoginTime to ensure consistency
-                        setInitialLoginTime();
-                        loginTime = localStorage.getItem('dailyLoginTime');
-                    }
 
                     // Prepare the data object with explicit pause state information
                     const data = {
@@ -5806,17 +5737,32 @@ body {
                         isPaused: currentState.isPaused || false,
                         pauseTime: currentState.pauseTime || null,
                         totalPauseDuration: currentState.totalPauseDuration || 0,
-                        loginTime: initialLoginTime,
+                        // Modify login time handling
+                        loginTime: localStorage.getItem('firstAuxUpdateTime') || (() => {
+                            const time = new Date().toISOString();
+                            localStorage.setItem('firstAuxUpdateTime', time);
+                            return time;
+                        })(),
+                        // Modify logout time handling
                         logoutTime: currentState.auxLabel.toLowerCase().includes('offline') ?
-                        localStorage.getItem('dailyLogoutTime') || new Date().toISOString() : null,
+                        localStorage.getItem('offlineTime') || (() => {
+                            const time = new Date().toISOString();
+                            localStorage.setItem('offlineTime', time);
+                            return time;
+                        })() : null,
                         lastAuxUpdate: new Date().toISOString(),
-                        date: today,
                         status: calculateUserStatus(
                             new Date().getTime(),
                             currentState.auxLabel,
                             currentState.isPaused
                         )
                     };
+
+                    // Set logoutTime if user is going offline
+                    if (currentState.auxLabel.toLowerCase().includes('offline') ||
+                        currentState.auxLabel.toLowerCase().includes('undefined')) {
+                        data.logoutTime = new Date().toISOString();
+                    }
 
                     console.log('Sending data to S3:', data);
 
@@ -5851,7 +5797,7 @@ body {
                         await updateDashboardData(true);
                     }
 
-                    return true; // Return success
+                    return data; // Return the data for any subsequent operations
 
                 } catch (error) {
                     console.error('Error sending AUX update:', error);
@@ -5896,9 +5842,52 @@ body {
             });
 
             // Helper function to calculate pause duration
-            function calculatePauseDuration(state) {
-                if (!state.pauseTime) return 0;
-                return new Date().getTime() - new Date(state.pauseTime).getTime();
+            function calculatePauseDuration(auxState) {
+                // Improved pause duration calculation with validation and error handling
+                try {
+                    const currentTime = Date.now();
+
+                    if (!auxState || !auxState.startTime) {
+                        return 0;
+                    }
+
+                    // If paused, calculate from pause time
+                    if (auxState.isPaused && auxState.pauseTime) {
+                        const pauseDuration = Math.max(0, currentTime - auxState.pauseTime);
+                        const totalPause = (auxState.totalPauseDuration || 0) + pauseDuration;
+                        return {
+                            current: pauseDuration,
+                            total: totalPause
+                        };
+                    }
+
+                    // If not paused, return only total accumulated pause time
+                    return {
+                        current: 0,
+                        total: auxState.totalPauseDuration || 0
+                    };
+                } catch (error) {
+                    console.error('Error calculating pause duration:', error);
+                    return {
+                        current: 0,
+                        total: 0
+                    };
+                }
+            }
+
+            // Implementation in timer update
+            function updateTimerWithPause(startTime, auxLabel) {
+                const auxState = JSON.parse(localStorage.getItem('auxState')) || {};
+                const currentTime = Date.now();
+                const pauseInfo = calculatePauseDuration(auxState);
+
+                const elapsedTime = currentTime - startTime - pauseInfo.total;
+
+                return {
+                    elapsedTime: Math.max(0, elapsedTime),
+                    pauseTime: pauseInfo.current,
+                    totalPauseTime: pauseInfo.total
+                };
             }
 
             // Helper function to broadcast state changes
@@ -5936,8 +5925,6 @@ body {
                 }
             });
 
-            let lastUpdates = [];
-
             async function updateDashboardData(isImmediateUpdate = false) {
                 try {
                     console.log('Updating dashboard data...', isImmediateUpdate ? '(Immediate update)' : '');
@@ -5954,7 +5941,7 @@ body {
                         const credentials = await SharedFunctions.showAuthModal();
                         if (!credentials) throw new Error('Authentication cancelled');
 
-                        token = await authenticate(credentials.username, credentials.password);
+                        token = await AuthService.ensureAuthenticated();
                         localStorage.setItem('lastAuthUsername', credentials.username);
                         localStorage.setItem('lastAuthPassword', credentials.password);
                     }
@@ -6004,29 +5991,20 @@ body {
                             const updateDate = new Date(lastUpdateTime).setHours(0, 0, 0, 0);
                             const timeSinceUpdate = currentTime - lastUpdateTime;
 
-                            // Ensure we're using the stored login time
-                            const storedLoginTime = userState.loginTime;
-                            const today = new Date().toISOString().split('T')[0];
-
-                            // Only use stored login time if it's from today
-                            const loginTime = userState.date === today ?
-                                  storedLoginTime :
-                            new Date().toISOString();
-
-                            //if (updateDate === today) {
-                            return {
-                                ...userState,
-                                fileKey: item.Key,
-                                lastModified: item.LastModified,
-                                timeSinceUpdate,
-                                isPaused: userState.isPaused || false,
-                                status: calculateUserStatus(
-                                    lastUpdateTime,
-                                    userState.auxLabel,
-                                    userState.isPaused
-                                )
-                            };
-                            //}
+                            if (updateDate === today) {
+                                return {
+                                    ...userState,
+                                    fileKey: item.Key,
+                                    lastModified: item.LastModified,
+                                    timeSinceUpdate,
+                                    isPaused: userState.isPaused || false,
+                                    status: calculateUserStatus(
+                                        lastUpdateTime,
+                                        userState.auxLabel,
+                                        userState.isPaused
+                                    )
+                                };
+                            }
                             return null;
                         } catch (error) {
                             console.error(`Error processing file ${item.Key}:`, error);
@@ -6056,9 +6034,6 @@ body {
                     });
 
                     console.log('Processed updates:', validUpdates.length);
-
-                    // Store the latest updates for CSV download
-                    lastUpdates = validUpdates;
 
                     // Update UI with the processed data
                     updateDashboardUI(validUpdates);
@@ -6099,6 +6074,7 @@ body {
                 }
             }
 
+
             // Error handling function
             function handleUpdateError(error) {
                 if (error.code === 'CredentialsError' ||
@@ -6115,7 +6091,7 @@ body {
                         try {
                             const credentials = await SharedFunctions.showAuthModal();
                             if (credentials) {
-                                const token = await authenticate(credentials.username, credentials.password);
+                                const token = await AuthService.ensureAuthenticated();
                                 localStorage.setItem('lastAuthUsername', credentials.username);
                                 localStorage.setItem('lastAuthPassword', credentials.password);
                                 startDashboardUpdates();
@@ -6182,7 +6158,6 @@ body {
             let currentSearchTerm = '';
 
             function updateDashboardUI(updates) {
-                const currentUsername = localStorage.getItem("currentUsername");
                 const tbody = document.getElementById('dashboard-data');
                 if (!tbody) {
                     console.error('Dashboard table body not found');
@@ -6209,19 +6184,16 @@ body {
     `;
                 document.head.appendChild(style);
 
+                const currentUsername = localStorage.getItem("currentUsername");
+
                 updates.forEach((update, index) => {
                     const row = tbody.insertRow();
                     const isCurrentUser = update.username === currentUsername;
-                    const today = new Date().toISOString().split('T')[0];
 
                     // Add highlighting for current user
                     if (isCurrentUser) {
                         row.style.backgroundColor = 'rgba(108, 92, 231, 0.1)';
                         row.style.borderLeft = '3px solid #6c5ce7';
-                        update = {
-                            ...update,
-                            loginTime: update.loginTime // Preserve the AWS login time
-                        };
                     }
 
                     // Determine status based on updated conditions
@@ -6258,7 +6230,7 @@ body {
                     auxCell.textContent = auxLabel;
                     if (update.isPaused) {
                         const pauseIndicator = document.createElement('span');
-                        pauseIndicator.innerHTML = '⏸️';
+                        pauseIndicator.innerHTML = 'â¸ï¸';
                         pauseIndicator.title = 'AUX Paused';
                         pauseIndicator.style.opacity = '0.7';
                         auxCell.appendChild(pauseIndicator);
@@ -6288,19 +6260,12 @@ body {
                     pauseTimeCell.textContent = formatTime(totalPause);
 
                     // Add cells for login time
-                    const loginTimeCell = row.insertCell();        
-                    if (update.username === currentUsername) {
-                        // For current user, use the stored initial login time
-                        const initialLoginTime = localStorage.getItem('dailyLoginTime');
-                        loginTimeCell.textContent = initialLoginTime ? 
-                            new Date(initialLoginTime).toLocaleTimeString() : 
-                        'No login time';
-                    } else {
-                        // For other users, use their login time from the update
-                        loginTimeCell.textContent = update.loginTime ? 
-                            new Date(update.loginTime).toLocaleTimeString() : 
-                        'No login time';
-                    }
+                    const loginTimeCell = row.insertCell();
+                    const storedLoginTime = localStorage.getItem('dailyLoginTime');
+                    loginTimeCell.textContent = storedLoginTime ?
+                        new Date(storedLoginTime).toLocaleTimeString() :
+                    new Date(update.loginTime).toLocaleTimeString();
+
                     // Add logout time if exists
                     const logoutTimeCell = row.insertCell();
                     const storedLogoutTime = localStorage.getItem('dailyLogoutTime');
@@ -6396,10 +6361,10 @@ ${update.isPaused ? `Paused Since: ${new Date(update.pauseTime).toLocaleString()
                 };
 
                 const statusIcon = {
-                    'active': '🟢',
-                    'away': '🟡',
-                    'paused': '⏸️',
-                    'inactive': '🔴'
+                    'active': 'ðŸŸ¢',
+                    'away': 'ðŸŸ¡',
+                    'paused': 'â¸ï¸',
+                    'inactive': 'ðŸ”´'
                 };
 
                 cell.innerHTML = `
@@ -6453,6 +6418,7 @@ ${update.isPaused ? `Paused Since: ${new Date(update.pauseTime).toLocaleString()
                     }
                 }
             }
+
             ///////////////////////////////////////////////////////////////
             //Update Selections Body//
 
@@ -7190,6 +7156,7 @@ ${update.isPaused ? `Paused Since: ${new Date(update.pauseTime).toLocaleString()
                     relatedAudits
                 });
             }
+
             ///////////////////////////////////////////////////////////////
             //Project details Quip alternative
             //Project details Form
@@ -7266,7 +7233,7 @@ ${update.isPaused ? `Paused Since: ${new Date(update.pauseTime).toLocaleString()
                         throw new Error('Authentication cancelled');
                     }
 
-                    const token = await authenticate(credentials.username, credentials.password);
+                    const token = await AuthService.ensureAuthenticated();
                     if (!token) {
                         throw new Error('Authentication failed');
                     }
@@ -7494,7 +7461,9 @@ ${update.isPaused ? `Paused Since: ${new Date(update.pauseTime).toLocaleString()
             document.head.appendChild(document.createElement('style')).textContent = projectDetailsStyles;
 
             //Project details Dashboard
-            document.getElementById('projectDetailsButton').addEventListener('click', showProjectDetailsForm);
+            document.getElementById('projectDetailsButton').addEventListener('click', function() {
+                SharedFunctions.showCustomAlert('This option is not available for your site')
+            });
 
             //Get project details
             async function showProjectDashboard() {
@@ -7530,7 +7499,7 @@ ${update.isPaused ? `Paused Since: ${new Date(update.pauseTime).toLocaleString()
                         throw new Error('Authentication cancelled');
                     }
 
-                    const token = await authenticate(credentials.username, credentials.password);
+                    const token = await AuthService.ensureAuthenticated();
                     if (!token) {
                         throw new Error('Authentication failed');
                     }
@@ -8596,7 +8565,7 @@ ${update.isPaused ? `Paused Since: ${new Date(update.pauseTime).toLocaleString()
                         try {
                             const credentials = await SharedFunctions.showAuthModal();
                             if (!credentials) throw new Error('Authentication cancelled');
-                            token = await authenticate(credentials.username, credentials.password);
+                            token = await AuthService.ensureAuthenticated();
                         } catch (error) {
                             SharedFunctions.showCustomAlert('Authentication failed');
                             return;
@@ -8659,7 +8628,7 @@ ${update.isPaused ? `Paused Since: ${new Date(update.pauseTime).toLocaleString()
                         throw new Error('Authentication cancelled');
                     }
 
-                    const token = await authenticate(credentials.username, credentials.password);
+                    const token = await AuthService.ensureAuthenticated();
                     if (!token) {
                         throw new Error('Authentication failed');
                     }
@@ -8796,7 +8765,9 @@ ${update.isPaused ? `Paused Since: ${new Date(update.pauseTime).toLocaleString()
                 window.URL.revokeObjectURL(url);
             }
 
-            document.getElementById('getProjectDetailsButton').addEventListener('click', showProjectDashboard);
+            document.getElementById('getProjectDetailsButton').addEventListener('click', function() {
+                SharedFunctions.showCustomAlert('This option is not available for your site')
+            });
             ///////////////////////////////////////////////////////////////
             //Timer Functions//
             let isPaused = false;
@@ -8806,55 +8777,75 @@ ${update.isPaused ? `Paused Since: ${new Date(update.pauseTime).toLocaleString()
                 try {
                     const auxState = JSON.parse(localStorage.getItem('auxState'));
                     if (!auxState) {
-                        console.log('No active timer to pause');
+                        console.warn('No active timer to pause');
                         return;
                     }
 
+                    // Toggle pause state
+                    isPaused = !isPaused;
                     const currentTime = Date.now();
-                    auxState.isPaused = !auxState.isPaused;
+                    const timerElement = document.getElementById('aux-timer');
+                    const pauseButton = document.getElementById('pause-button');
 
-                    if (auxState.isPaused) {
+                    if (isPaused) {
+                        // Pausing timer
                         auxState.pauseTime = currentTime;
-                        auxState.status = 'paused';
+                        auxState.isPaused = true;
+
+                        // Cancel any existing animation frame
                         if (animationFrameId) {
                             cancelAnimationFrame(animationFrameId);
                             animationFrameId = null;
                         }
-                    } else {
-                        const pauseDuration = currentTime - (auxState.pauseTime || currentTime);
-                        auxState.totalPauseDuration = (auxState.totalPauseDuration || 0) + pauseDuration;
-                        delete auxState.pauseTime;
-                        auxState.status = 'active';
-                        const timerElement = document.getElementById('aux-timer');
+
+                        // Update UI immediately
                         if (timerElement) {
+                            const currentText = timerElement.textContent;
+                            if (!currentText.includes('(Paused)')) {
+                                timerElement.textContent += ' (Paused)';
+                            }
+                            timerElement.style.opacity = '0.5';
+                        }
+
+                    } else {
+                        // Resuming timer
+                        if (auxState.pauseTime) {
+                            const pauseDuration = currentTime - auxState.pauseTime;
+                            auxState.totalPauseDuration = (auxState.totalPauseDuration || 0) + Math.max(0, pauseDuration);
+                        }
+                        delete auxState.pauseTime;
+                        auxState.isPaused = false;
+
+                        // Restart the timer immediately
+                        if (timerElement) {
+                            timerElement.style.opacity = '1';
+                            // Remove pause indicator if present
+                            timerElement.textContent = timerElement.textContent.replace(' (Paused)', '');
+                            // Restart animation
                             requestAnimationFrame(() => updateTimer(auxState.startTime, auxState.auxLabel, timerElement));
                         }
+                    }
+
+                    // Update button state
+                    if (pauseButton) {
+                        pauseButton.textContent = isPaused ? 'Resume' : 'Pause';
+                        pauseButton.style.backgroundColor = isPaused ? '#FFA500' : '#4CAF50';
                     }
 
                     // Update localStorage
                     auxState.lastUpdate = currentTime;
                     localStorage.setItem('auxState', JSON.stringify(auxState));
 
-                    // Update UI elements
-                    updateUIForPauseState(auxState.isPaused, auxState);
-
-                    // Update pause button
-                    const pauseButton = document.getElementById('pause-button');
-                    if (pauseButton) {
-                        pauseButton.textContent = auxState.isPaused ? 'Resume' : 'Pause';
-                        pauseButton.style.backgroundColor = auxState.isPaused ? '#FFA500' : '#4CAF50';
-                    }
-
                     // Broadcast state change
                     window.dispatchEvent(new CustomEvent('auxStateChange', {
                         detail: {
-                            isPaused: auxState.isPaused,
+                            isPaused,
                             auxState,
                             timestamp: currentTime
                         }
                     }));
 
-                    // Send update to AWS
+                    // Update AWS if needed
                     await sendAuxUpdate();
 
                     // Update dashboard if open
@@ -8865,6 +8856,12 @@ ${update.isPaused ? `Paused Since: ${new Date(update.pauseTime).toLocaleString()
                 } catch (error) {
                     console.error('Error in togglePause:', error);
                     SharedFunctions.showCustomAlert('Error updating pause state');
+
+                    // Restore consistent state
+                    if (animationFrameId) {
+                        cancelAnimationFrame(animationFrameId);
+                        animationFrameId = null;
+                    }
                 }
             }
 
@@ -8947,11 +8944,6 @@ ${update.isPaused ? `Paused Since: ${new Date(update.pauseTime).toLocaleString()
                 }
             }
 
-            function validateTimeFormat(timeString) {
-                const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$/;
-                return timeRegex.test(timeString);
-            }
-
             function formatToMMDDYYYY(date) {
                 if (!(date instanceof Date)) {
                     date = new Date(date);
@@ -8995,13 +8987,6 @@ ${update.isPaused ? `Paused Since: ${new Date(update.pauseTime).toLocaleString()
                 return date.toUTCString();
             }
 
-            function formatDate(date) {
-                const year = date.getFullYear();
-                const month = String(date.getMonth() + 1).padStart(2, '0');
-                const day = String(date.getDate()).padStart(2, '0');
-                return `${year}-${month}-${day}`;
-            }
-
             function calculateTimeSpent(startTime, pauseTime = null) {
                 const endTime = new Date();
                 let timeSpent = 0;
@@ -9034,54 +9019,59 @@ ${update.isPaused ? `Paused Since: ${new Date(update.pauseTime).toLocaleString()
             }
 
             function updateTimer(startTime, auxLabel, timerElement) {
+                if (!startTime || !timerElement) {
+                    console.error('Missing required parameters for updateTimer');
+                    return 0;
+                }
+
+                try {
+                    const auxState = JSON.parse(localStorage.getItem('auxState')) || {};
+                    const currentTime = Date.now();
+                    let elapsedTime = 0;
+
+                    // Calculate elapsed time
+                    if (auxState.isPaused) {
+                        elapsedTime = Math.max(0, auxState.pauseTime - startTime - (auxState.totalPauseDuration || 0));
+                    } else {
+                        elapsedTime = Math.max(0, currentTime - startTime - (auxState.totalPauseDuration || 0));
+                    }
+
+                    // Update display immediately
+                    if (timerElement) {
+                        const cleanedAuxLabel = auxLabel.replace(/\s*-\s*N\/A\s*/g, '').trim();
+                        const auxParts = cleanedAuxLabel.split(' - ').filter(part => part.trim() !== '');
+                        const displayedAuxLabel = auxParts[auxParts.length - 1] || 'No AUX available';
+
+                        // Always update the display text
+                        timerElement.textContent = `${displayedAuxLabel} : ${formatTime(elapsedTime)}`;
+                        if (auxState.isPaused) {
+                            timerElement.textContent += ' (Paused)';
+                        }
+                    }
+
+                    // Continue animation only if not paused
+                    if (!auxState.isPaused) {
+                        animationFrameId = requestAnimationFrame(() => updateTimer(startTime, auxLabel, timerElement));
+                    }
+
+                    return elapsedTime;
+
+                } catch (error) {
+                    console.error('Timer update error:', error);
+                    if (animationFrameId) {
+                        cancelAnimationFrame(animationFrameId);
+                        animationFrameId = null;
+                    }
+                    return 0;
+                }
+            }
+
+            // Add window unload handler
+            window.addEventListener('unload', () => {
                 if (animationFrameId) {
                     cancelAnimationFrame(animationFrameId);
                 }
-
-                const auxState = JSON.parse(localStorage.getItem('auxState')) || {};
-                const currentTime = Date.now();
-                let elapsedTime;
-
-                if (auxState.isPaused) {
-                    // If paused, use the pause time to calculate elapsed time
-                    elapsedTime = auxState.pauseTime - startTime - (auxState.totalPauseDuration || 0);
-                } else {
-                    // If not paused, calculate current elapsed time
-                    elapsedTime = currentTime - startTime - (auxState.totalPauseDuration || 0);
-                }
-
-                // Ensure elapsed time is never negative
-                elapsedTime = Math.max(0, elapsedTime);
-
-                const cleanedAuxLabel = auxLabel.replace(/\s*-\s*N\/A\s*/g, '').trim();
-                const auxParts = cleanedAuxLabel.split(' - ').filter(part => part.trim() !== '');
-                let displayedAuxLabel = auxParts[auxParts.length - 1] || 'No AUX available';
-
-                // Update timer display
-                if (timerElement) {
-                    let displayText = `${displayedAuxLabel} : ${formatTime(elapsedTime)}`;
-                    if (auxState.isPaused) {
-                        displayText += ' (Paused)';
-                    }
-                    timerElement.textContent = displayText;
-                    timerElement.title = `Current AUX: ${cleanedAuxLabel}`;
-                }
-
-                // Store current state
-                auxState.currentTime = elapsedTime;
-                auxState.lastUpdate = currentTime;
-                localStorage.setItem('auxState', JSON.stringify(auxState));
-
-                animationFrameId = requestAnimationFrame(() => updateTimer(startTime, auxLabel, timerElement));
-
-                // Continue animation frame only if not paused
-                if (!auxState.isPaused) {
-                    animationFrameId = requestAnimationFrame(() => updateTimer(startTime, auxLabel, timerElement));
-                }
-
-                return elapsedTime;
-            }
-
+            });
 
             // Add this new function
             function updateDashboardTimers() {
@@ -9508,8 +9498,8 @@ ${auxState.startTime ? `Started: ${new Date(auxState.startTime).toLocaleTimeStri
 
                 if (prevState && prevState.auxLabel !== newAuxLabel) {
                     const timeSpent = prevState.isPaused ?
-                          (prevState.pauseTime - prevState.startTime) - (prevState.totalPauseDuration || 0) :
-                    (now - prevState.startTime) - (prevState.totalPauseDuration || 0);
+                          calculateTimeSpent(prevState.startTime, prevState.pauseTime) :
+                    calculateTimeSpent(prevState.startTime);
 
                     await saveAUXData({
                         auxLabel: prevState.auxLabel,
@@ -9524,24 +9514,19 @@ ${auxState.startTime ? `Started: ${new Date(auxState.startTime).toLocaleTimeStri
 
                 if (!prevState || prevState.auxLabel !== newAuxLabel) {
                     cleanupTimer();
+                    startAUXTimer(newAuxLabel);
 
-                    // Create new state
+                    // Create new state with preserved pause duration
                     const newState = {
                         auxLabel: newAuxLabel,
                         startTime: now,
                         timestamp: now,
                         isPaused: false,
-                        totalPauseDuration: 0 // Reset pause duration for new AUX
+                        totalPauseDuration: currentTotalPauseDuration // Preserve the total pause duration
                     };
 
                     // Store the new state
                     localStorage.setItem('auxState', JSON.stringify(newState));
-
-                    // Start the timer immediately
-                    const timerElement = displayTimer();
-                    if (timerElement) {
-                        updateTimer(now, newAuxLabel, timerElement);
-                    }
                 }
 
                 // Ensure pause duration is maintained when going offline
@@ -9551,11 +9536,10 @@ ${auxState.startTime ? `Started: ${new Date(auxState.startTime).toLocaleTimeStri
                     localStorage.setItem('auxState', JSON.stringify(currentState));
                 }
 
-                await sendAuxUpdate();
                 await sendAuxUpdateWithRetry();
 
                 if (document.getElementById('aux-dashboard')) {
-                    await updateDashboardData(true);
+                    updateDashboardData();
                 }
             }
 
@@ -9575,6 +9559,8 @@ ${auxState.startTime ? `Started: ${new Date(auxState.startTime).toLocaleTimeStri
                 console.log('Initial AUX state:', initialAuxState);
                 SharedFunctions.injectAuthStyles();
                 cleanupTimer();
+                clearDailyTimes();
+                setInitialLoginTime();
                 await SharedFunctions.displayUsername();
                 restoreTimer();
                 addFileInput();
@@ -9635,4 +9621,3 @@ ${auxState.startTime ? `Started: ${new Date(auxState.startTime).toLocaleTimeStri
 </script>
 </body>
 </html>
-
