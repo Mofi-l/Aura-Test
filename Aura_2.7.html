@@ -1730,6 +1730,7 @@ body {
             }
 
             // Function to display AUX data in a table
+            // Function to display AUX data in a table
             function displayAUXData(showTable = false) {
                 let popupContainer = document.getElementById('auxTablePopup');
 
@@ -1790,16 +1791,6 @@ body {
                 controlPanel.style.justifyContent = 'space-between';
                 controlPanel.style.alignItems = 'center';
 
-                const editButton = document.createElement('button');
-                editButton.textContent = 'Enable Editing';
-                editButton.style.padding = '8px 16px';
-                editButton.style.backgroundColor = '#007bff';
-                editButton.style.color = 'white';
-                editButton.style.border = 'none';
-                editButton.style.borderRadius = '4px';
-                editButton.style.cursor = 'pointer';
-                editButton.style.marginRight = '10px';
-
                 const saveButton = document.createElement('button');
                 saveButton.textContent = 'Save All Changes';
                 saveButton.style.padding = '8px 16px';
@@ -1848,8 +1839,6 @@ body {
 
                 function toggleEditMode() {
                     isEditing = !isEditing;
-                    editButton.textContent = isEditing ? 'Disable Editing' : 'Enable Editing';
-                    editButton.style.backgroundColor = isEditing ? '#dc3545' : '#007bff';
                     saveButton.style.display = isEditing ? 'block' : 'none';
 
                     const inputs = table.getElementsByTagName('input');
@@ -1860,7 +1849,6 @@ body {
                     }
                 }
 
-                editButton.onclick = toggleEditMode;
                 saveButton.onclick = () => saveAllChanges(table, auxData);
 
                 auxData.forEach((entry, index) => {
@@ -1901,8 +1889,49 @@ body {
 
                 popupContainer.innerHTML = '';
 
+                // Informative message
+                const infoMessage = document.createElement('div');
+                infoMessage.style.cssText = `
+    background: rgba(25, 118, 210, 0.1);
+    border-left: 4px solid #1976d2;
+    padding: 16px;
+    margin: 10px 0;
+    border-radius: 4px;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #333;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+`;
+
+                const infoIcon = document.createElement('span');
+                infoIcon.innerHTML = '&#9432;';
+                infoIcon.style.cssText = `
+    font-size: 20px;
+    color: #: #1976d2;
+`;
+
+                const messageText = document.createElement('span');
+                messageText.textContent = 'This table displays your current NPT data for the day. Please note that this data is read-only and cannot be modified directly. Click the Export to AWS button below to send your NPT data';
+
+                infoMessage.appendChild(infoIcon);
+                infoMessage.appendChild(messageText);
+
+                // Add Export to AWS button above the table
+                const exportToAWSButton = document.createElement('img');
+                exportToAWSButton.id = 'exportToAWSButton';
+                exportToAWSButton.src = 'https://raw.githubusercontent.com/Mofi-l/static-images/main/cloud-computing.png';
+                exportToAWSButton.alt = 'Export to AWS';
+                exportToAWSButton.title = 'Export to AWS';
+                exportToAWSButton.style.width = '30px';
+                exportToAWSButton.style.height = '30px';
+                exportToAWSButton.style.cursor = 'pointer';
+                exportToAWSButton.style.margin = '0 0 10px 0';
+                exportToAWSButton.onclick = exportToAWS;
+
                 const closeButton = document.createElement('button');
-                closeButton.textContent = 'Ã—';
+                closeButton.textContent = '×';
                 closeButton.style.position = 'absolute';
                 closeButton.style.right = '10px';
                 closeButton.style.top = '10px';
@@ -1925,8 +1954,9 @@ body {
                     popupContainer.appendChild(modifiedIndicator);
                 }
 
-                controlPanel.appendChild(editButton);
+                popupContainer.appendChild(infoMessage);
                 controlPanel.appendChild(saveButton);
+                popupContainer.appendChild(exportToAWSButton);
                 popupContainer.appendChild(closeButton);
                 popupContainer.appendChild(controlPanel);
                 tableContainer.appendChild(table);
@@ -4599,7 +4629,7 @@ body {
             document.getElementById('restoreCSVButton').addEventListener('click', function() {
                 document.getElementById('csvFileInput').click();
             });
-            document.getElementById('exportToAWSButton').addEventListener('click', exportToAWS);
+            document.getElementById('exportToAWSButton').addEventListener('click', displayAUXData);
             document.getElementById('displayAuxDataButton').addEventListener('click', function() {
                 const popupContainer = document.getElementById('auxTablePopup');
                 if (popupContainer) {
@@ -9621,3 +9651,4 @@ ${auxState.startTime ? `Started: ${new Date(auxState.startTime).toLocaleTimeStri
 </script>
 </body>
 </html>
+
