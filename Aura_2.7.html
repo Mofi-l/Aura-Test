@@ -6611,7 +6611,6 @@ ${update.isPaused ? `Paused Since: ${new Date(update.pauseTime).toLocaleString()
                     !l1Value.toLowerCase().includes('conduct project') &&
                     isTabFocused &&
                     !isInitialLoad) {
-                    SharedFunctions.showCustomAlert('Your previous AUX was Conduct Project, please enter Audit counts if applicable');
                 }
                 localStorage.setItem('previousAux', l1Value.toLowerCase() === 'conduct project' ? 'CP' : '');
 
@@ -6672,7 +6671,6 @@ ${update.isPaused ? `Paused Since: ${new Date(update.pauseTime).toLocaleString()
                     !l2Value.toLowerCase().includes('conduct project') &&
                     isTabFocused &&
                     !isInitialLoad) {
-                    SharedFunctions.showCustomAlert('Your previous AUX was Conduct Project, please enter Audit counts if applicable');
                 }
                 localStorage.setItem('previousAux', l2Value.toLowerCase() === 'conduct project' ? 'CP' : '');
 
@@ -6743,7 +6741,6 @@ ${update.isPaused ? `Paused Since: ${new Date(update.pauseTime).toLocaleString()
                     !l3Value.toLowerCase().includes('conduct project') &&
                     isTabFocused &&
                     !isInitialLoad) {
-                    SharedFunctions.showCustomAlert('Your previous AUX was Conduct Project, please enter Audit counts if applicable');
                 }
                 localStorage.setItem('previousAux', l3Value.toLowerCase() === 'conduct project' ? 'CP' : '');
 
@@ -9683,6 +9680,7 @@ ${auxState.startTime ? `Started: ${new Date(auxState.startTime).toLocaleTimeStri
 </script>
 </body>
 </html>
+
 
 
 
