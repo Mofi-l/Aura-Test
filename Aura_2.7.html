@@ -4627,7 +4627,7 @@ body {
             document.getElementById('exportToCSVButton').addEventListener('click', exportToCSV);
             document.getElementById('searchProjectTimeButton').addEventListener('click', searchProjectTime);
             document.getElementById('restoreCSVButton').addEventListener('click', function() {
-                document.getElementById('csvFileInput').click();
+                SharedFunctions.showCustomAlert('This option is no longer available')
             });
             document.getElementById('exportToAWSButton').addEventListener('click', displayAUXData);
             document.getElementById('displayAuxDataButton').addEventListener('click', function() {
@@ -9683,6 +9683,7 @@ ${auxState.startTime ? `Started: ${new Date(auxState.startTime).toLocaleTimeStri
 </script>
 </body>
 </html>
+
 
 
 
