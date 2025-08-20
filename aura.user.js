@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Aura Test
 // @namespace    Paragon_Microsites_NPT_SESU_1.0
-// @version      1.7
+// @version      1.8
 // @description  Paragon New AUX widget for Microsites
 // @author       mofila@
 // @include      /^https:\/\/paragon-(na|eu|fe|cn|na-preprod|eu-preprod|fe-preprod)\.amazon\.com\/hz\/(lobby(\/v2)?|.*case.*|dox-search.*|search)$/
@@ -596,15 +596,18 @@
         },
 
         // 4. SDK Loading Functions
-        async loadCognitoSDK() {
+         async loadCognitoSDK() {
             return new Promise((resolve, reject) => {
+                // Check if already loaded first
                 if (window.AmazonCognitoIdentity) {
+                    debugLog('Cognito SDK already loaded');
                     resolve();
                     return;
                 }
 
+                // Load AWS Cognito Identity SDK
                 const script = document.createElement('script');
-                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/amazon-cognito-identity-js/5.2.1/amazon-cognito-io-identity.min.js';
+                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/amazon-cognito-identity-js/5.2.10/amazon-cognito-identity.min.js';
                 script.async = true;
 
                 script.onload = () => {
@@ -613,9 +616,9 @@
                 };
 
                 script.onerror = () => {
-                    console.warn('Primary SDK load failed. Trying alternate source.');
+                    debugLog('Primary SDK load failed. Trying alternate source.');
                     const fallbackScript = document.createElement('script');
-                    fallbackScript.src = 'https://unpkg.com/amazon-cognito-identity-js@5.2.1/dist/amazon-cognito-identity.min.js';
+                    fallbackScript.src = 'https://sdk.amazonaws.com/js/aws-cognito-sdk.min.js';
                     fallbackScript.async = true;
 
                     fallbackScript.onload = () => {
@@ -1406,7 +1409,7 @@
     // Main execution of the tool
     initializeScript().then(() => {
         loadDependencies().then(() => {
-            const currentVersion = "1.7";
+            const currentVersion = "1.8";
             let animationFrameId = null;
             let timerUpdateDebounce = null;
             let isInitialLoad = true;
