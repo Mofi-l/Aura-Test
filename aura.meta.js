@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Aura Test
 // @namespace    Paragon_Microsites_NPT_SESU_1.0
-// @version      1.7
+// @version      1.8
 // @description  Paragon New AUX widget for Microsites
 // @author       mofila@
 // @include      /^https:\/\/paragon-(na|eu|fe|cn|na-preprod|eu-preprod|fe-preprod)\.amazon\.com\/hz\/(lobby(\/v2)?|.*case.*|dox-search.*|search)$/
